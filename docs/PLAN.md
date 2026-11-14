@@ -1,7 +1,7 @@
 # AssistLife — Product Plan
 
 > Working name: **AssistLife** (final name not chosen yet).
-> Status: **planning only — no app code yet.** Implementation starts on the owner's explicit "go".
+> Status: **version 1 in progress — step 1 (calendar core) built.** Each further step starts on the owner's go-ahead.
 > New ideas go to [IDEAS.md](IDEAS.md) and are reviewed before each build step.
 
 ## 1. Vision
@@ -207,13 +207,20 @@ Known risks to handle during the build:
 
 Delivered in testable steps:
 
-1. **Calendar core**: month, week and day views, dual dates, Hijri engine, layers, events, Arabic first.
+1. **Calendar core**: month, week and day views, dual dates, Hijri engine, layers, events, Arabic first. ✅ Built — see the notes below.
 2. **Google Calendar sync** and accounts with encrypted backup.
 3. **Islamic layer**: prayer times, fasting days, athkar, Friday mode, prayer-anchored events and conflicts.
 4. **Health layer**: medications, sport, diet, appointments, fasting-aware reminders.
 5. **Today screen** with the daily card and the voice of the app.
 6. **Print**: day, week and month with automatic paper size.
 7. **Test release**: browser version and Android download.
+
+#### Step 1 notes
+
+- **Verified**: unit tests for dates, the Hijri engine and repeating events; the screens were exercised in a browser at phone, tablet and desktop sizes. **Not yet run on a physical phone.**
+- **Hijri engine check**: the Morocco estimate reproduces the announced starts of Ramadan 1446, Shawwal 1446, Dhul Hijjah 1446, Muharram 1447 and Ramadan 1447; the Mecca estimate reproduces the calculated calendar for the same period.
+- **Storage** is a simple on-device store behind one module (`src/store`). It is replaced by a synced database in step 2 without changing the screens.
+- **Not in step 1**: changing or deleting a single occurrence of a repeating event (edits apply to the whole series); "every 2 weeks"-style intervals in the form (the engine supports them); corrections delivered from the server (they are bundled for now).
 
 ### Phase 2 — cycle and make-up
 
