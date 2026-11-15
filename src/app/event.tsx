@@ -8,11 +8,14 @@ import { Card, Chip, Row, ScreenHeader, Toggle } from '@/components/form';
 import { DatePickerSheet, TimePickerSheet } from '@/components/pickers';
 import { Button, Confirm, IconButton, Sheet, Txt } from '@/components/ui';
 import { deleteGoogleEvent, googleLayers, saveGoogleEvent, useGoogle } from '@/google/store';
-import { useLocale, usePalette } from '@/hooks';
+import { ISLAMIC_CONTENT } from '@/content/islamic';
+import { useLocale, usePalette, usePrayerTimes } from '@/hooks';
 import type { StringKey } from '@/i18n/strings';
 import { MIN_PER_DAY, formatTime, parseIso, today, toIso, weekday, type DayNum } from '@/lib/dates';
 import type { RepeatFreq } from '@/lib/events';
 import { googleCanRepeat, googleLayerId, isGoogleId } from '@/lib/google';
+import { isSystemId, systemKey } from '@/lib/islamic';
+import { coveredPrayers, PRAYERS, resolveAnchor, type Anchor } from '@/lib/prayer';
 import { layerName, useStore, type EventDraft } from '@/store';
 import { FONT, RADIUS, SPACE } from '@/theme';
 
@@ -27,14 +30,60 @@ const REPEAT_LABEL: Record<RepeatFreq | 'none', StringKey> = {
 };
 const REPEAT_OPTIONS = Object.keys(REPEAT_LABEL) as (RepeatFreq | 'none')[];
 
-type Picker = 'date' | 'endDate' | 'start' | 'end' | 'repeat' | 'until' | 'delete' | null;
+type Picker = 'date' | 'endDate' | 'start' | 'end' | 'anchor' | 'repeat' | 'until' | 'delete' | null;
+
+const ANCHOR_MINUTES = [5, 10, 15, 20, 30, 45, 60, 90];
 
 export default function EventScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const googleEvent = useGoogle((g) => (isGoogleId(id) ? g.events.find((e) => e.id === id) : undefined));
   const writable = useGoogle((g) => g.calendars.find((c) => googleLayerId(c.id) === googleEvent?.layerId)?.writable === true);
+  if (isSystemId(id)) return <SystemEventView id={id!} />;
   // Events of a calendar the user may not change (holidays, shared read-only ones) are shown, not edited.
   return isGoogleId(id) && !writable ? <GoogleEventView id={id!} /> : <EventForm />;
+}
+
+/** A fasting day, an occasion or a remembrance time: what it is, and the evidence for it. */
+function SystemEventView({ id }: { id: string }) {
+  const p = usePalette();
+  const { t, lang, weekdayName, formatGregorian, formatHijri } = useLocale();
+  const content = ISLAMIC_CONTENT[systemKey(id)];
+  const day = Number(id.split(':')[3]) || today();
+
+  return (
+    <SafeAreaView style={[styles.root, { backgroundColor: p.bg }]}>
+      <ScreenHeader title={content?.title[lang] ?? ''} />
+      {content && (
+        <ScrollView contentContainerStyle={styles.content}>
+          <Txt weight="medium" testID="system-date">
+            {weekdayName(day)} {formatGregorian(day)}
+          </Txt>
+          <Txt size={13} color={p.gold} style={{ marginBottom: SPACE.lg }}>
+            {formatHijri(day)}
+          </Txt>
+          <Txt size={16} style={{ marginBottom: SPACE.lg }} testID="system-note">
+            {content.note[lang]}
+          </Txt>
+          {content.evidence && (
+            <Card>
+              <View style={styles.evidence}>
+                {/* The verse or hadith is always shown in Arabic, whatever the app's language. */}
+                <Txt size={18} weight="medium" style={styles.evidenceText} testID="system-evidence">
+                  «{content.evidence.text}»
+                </Txt>
+                <Txt size={12} color={p.muted} style={styles.evidenceSource} testID="system-source">
+                  {t('source')}: {content.evidence.source}
+                </Txt>
+              </View>
+            </Card>
+          )}
+          <Txt size={11} color={p.faint} style={{ marginTop: SPACE.md }}>
+            {t('pendingReview')}
+          </Txt>
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
 }
 
 /** An event from a read-only Google calendar: shown, not edited here. */
@@ -90,7 +139,8 @@ function GoogleEventView({ id }: { id: string }) {
 function EventForm() {
   const p = usePalette();
   const router = useRouter();
-  const { t, lang, weekdays, weekdayName, formatGregorian, formatHijri } = useLocale();
+  const { t, lang, weekdays, weekdayName, formatGregorian, formatHijri, prayerName, formatAnchor } = useLocale();
+  const prayers = usePrayerTimes();
   const params = useLocalSearchParams<{ id?: string; date?: string; start?: string }>();
 
   const ownLayers = useStore((s) => s.layers);
@@ -112,7 +162,8 @@ function EventForm() {
   const [date, setDate] = useState<DayNum>(parseIso(existing?.date ?? params.date) ?? today());
   const [allDay, setAllDay] = useState(existing?.allDay ?? false);
   const [spanDays, setSpanDays] = useState(existing?.spanDays ?? 1);
-  const [startMin, setStartMin] = useState(initialStart);
+  const [fixedStart, setStartMin] = useState(initialStart);
+  const [anchor, setAnchor] = useState<Anchor | null>(existing?.anchor ?? null);
   const [durationMin, setDurationMin] = useState(existing?.durationMin ?? 60);
   const [freq, setFreq] = useState<RepeatFreq | 'none'>(existing?.repeat?.freq ?? 'none');
   const [weekdaysOn, setWeekdaysOn] = useState<number[]>(existing?.repeat?.weekdays ?? []);
@@ -125,6 +176,10 @@ function EventForm() {
   const [googleError, setGoogleError] = useState(false);
 
   const inGoogle = isGoogleId(layerId);
+  // Tied to a prayer, the start is whatever that prayer gives on the chosen day.
+  const tied = anchor !== null && !allDay && !inGoogle;
+  const startMin = tied ? resolveAnchor(anchor, prayers(date)) : fixedStart;
+  const covered = allDay ? [] : coveredPrayers(prayers(date), startMin, startMin + durationMin);
   // Google has no Hijri calendar, and one occurrence of a Google series cannot carry its own repeat.
   const repeatOptions = REPEAT_OPTIONS.filter((option) => !inGoogle || option === 'none' || googleCanRepeat(option));
   const canRepeat = !googleEvent;
@@ -149,6 +204,7 @@ function EventForm() {
       spanDays: allDay ? spanDays : 1,
       startMin: allDay ? 0 : startMin,
       durationMin: allDay ? 0 : durationMin,
+      anchor: tied ? anchor : undefined,
       repeat:
         freq === 'none'
           ? undefined
@@ -257,11 +313,32 @@ function EventForm() {
             <Row icon="flag-outline" label={t('endDate')} value={dual(date + spanDays - 1)} onPress={() => setPicker('endDate')} testID="end-date-row" last />
           ) : (
             <>
-              <Row icon="time-outline" label={t('starts')} value={formatTime(startMin)} onPress={() => setPicker('start')} testID="start-row" />
+              <Row
+                icon="time-outline"
+                label={t('starts')}
+                value={formatTime(startMin)}
+                onPress={tied ? undefined : () => setPicker('start')}
+                testID="start-row"
+              />
+              {!inGoogle && (
+                <Row
+                  icon="moon-outline"
+                  label={t('withPrayer')}
+                  value={tied ? formatAnchor(anchor) : t('fixedTime')}
+                  onPress={() => setPicker('anchor')}
+                  testID="anchor-row"
+                />
+              )}
               <Row icon="time-outline" label={t('ends')} value={formatTime(endMin)} onPress={() => setPicker('end')} testID="end-row" last />
             </>
           )}
         </Card>
+
+        {covered.length > 0 && (
+          <Txt size={13} color={p.danger} style={styles.error} testID="form-conflict">
+            {t('coversPrayer')} {covered.map(prayerName).join('، ')}. {t('coversPrayerHint')}
+          </Txt>
+        )}
 
         <View style={{ height: SPACE.lg }} />
         {canRepeat && (
@@ -390,6 +467,73 @@ function EventForm() {
           }}
         />
       )}
+      {picker === 'anchor' && (
+        <Sheet
+          title={t('withPrayer')}
+          onClose={() => setPicker(null)}
+          testID="anchor-sheet"
+          footer={
+            <>
+              <Button
+                label={t('fixedTime')}
+                kind="ghost"
+                style={{ flex: 1 }}
+                testID="anchor-clear"
+                onPress={() => {
+                  // Keep the time the prayer gave today as the fixed time.
+                  setStartMin(startMin);
+                  setAnchor(null);
+                  setPicker(null);
+                }}
+              />
+              <Button
+                label={t('done')}
+                style={{ flex: 1 }}
+                testID="anchor-done"
+                onPress={() => {
+                  setAnchor(anchor ?? { prayer: 'asr', offsetMin: 0 });
+                  setPicker(null);
+                }}
+              />
+            </>
+          }>
+          <View style={styles.chips}>
+            {PRAYERS.map((name) => (
+              <Chip
+                key={name}
+                label={prayerName(name)}
+                active={(anchor?.prayer ?? 'asr') === name}
+                testID={`anchor-${name}`}
+                onPress={() => setAnchor({ prayer: name, offsetMin: anchor?.offsetMin ?? 0 })}
+              />
+            ))}
+          </View>
+          <View style={[styles.chips, { marginTop: SPACE.lg }]}>
+            {([-1, 0, 1] as const).map((sign) => (
+              <Chip
+                key={sign}
+                label={t(sign < 0 ? 'anchorBefore' : sign > 0 ? 'anchorAfter' : 'anchorAt')}
+                active={Math.sign(anchor?.offsetMin ?? 0) === sign}
+                testID={`anchor-sign-${sign}`}
+                onPress={() => setAnchor({ prayer: anchor?.prayer ?? 'asr', offsetMin: sign * (Math.abs(anchor?.offsetMin ?? 0) || 15) })}
+              />
+            ))}
+          </View>
+          {(anchor?.offsetMin ?? 0) !== 0 && (
+            <View style={[styles.chips, { marginTop: SPACE.lg }]}>
+              {ANCHOR_MINUTES.map((minutes) => (
+                <Chip
+                  key={minutes}
+                  label={`${minutes} ${t('minutesShort')}`}
+                  active={Math.abs(anchor!.offsetMin) === minutes}
+                  testID={`anchor-min-${minutes}`}
+                  onPress={() => setAnchor({ prayer: anchor!.prayer, offsetMin: Math.sign(anchor!.offsetMin) * minutes })}
+                />
+              ))}
+            </View>
+          )}
+        </Sheet>
+      )}
       {picker === 'repeat' && (
         <Sheet title={t('repeat')} onClose={() => setPicker(null)} testID="repeat-sheet">
           <View style={{ gap: SPACE.sm }}>
@@ -430,6 +574,10 @@ const styles = StyleSheet.create({
   dual: { alignItems: 'flex-end', flexShrink: 1 },
   weekdays: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderBottomWidth: StyleSheet.hairlineWidth },
   notes: { minHeight: 96, textAlignVertical: 'top' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
+  evidence: { padding: SPACE.lg, gap: SPACE.md },
+  evidenceText: { lineHeight: 32, writingDirection: 'rtl', textAlign: 'right' },
+  evidenceSource: { writingDirection: 'rtl', textAlign: 'right' },
   footerError: { paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, textAlign: 'center' },
   footer: { flexDirection: 'row', padding: SPACE.md, borderTopWidth: StyleSheet.hairlineWidth },
 });

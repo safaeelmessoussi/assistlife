@@ -4,8 +4,27 @@ import { useColorScheme } from 'react-native';
 import { LANGS, STRINGS, WEEKDAYS, gregorianMonths, hijriMonths, type StringKey } from '@/i18n/strings';
 import { fromDayNum, nowMinutes, today, weekday, type DayNum } from '@/lib/dates';
 import { hijriFromDay, type HijriConfig, type HijriDate } from '@/lib/hijri/engine';
+import type { Anchor, DayPrayers, PrayerName } from '@/lib/prayer';
+import { prayerTimes } from '@/lib/prayer';
 import { useStore } from '@/store';
 import { DARK, LIGHT, type Palette } from '@/theme';
+
+const PRAYER_LABEL: Record<PrayerName, StringKey> = {
+  fajr: 'prayerFajr',
+  sunrise: 'prayerSunrise',
+  dhuhr: 'prayerDhuhr',
+  asr: 'prayerAsr',
+  maghrib: 'prayerMaghrib',
+  isha: 'prayerIsha',
+};
+
+/** Prayer times for any day, for the place and method chosen in the settings. */
+export function usePrayerTimes(): (day: DayNum) => DayPrayers {
+  const place = useStore((s) => s.settings.place);
+  const method = useStore((s) => s.settings.prayerMethod);
+  const hanafi = useStore((s) => s.settings.asrHanafi);
+  return useCallback((day: DayNum) => prayerTimes(day, place, method, hanafi), [place, method, hanafi]);
+}
 
 export function usePalette(): Palette {
   const system = useColorScheme();
@@ -46,6 +65,15 @@ export function useLocale() {
         return `${h.day} ${hMonths[h.month - 1]} ${h.year}`;
       },
       weekdayName: (day: DayNum) => WEEKDAYS[lang].long[weekday(day)],
+      prayerName: (name: PrayerName) => strings[PRAYER_LABEL[name]],
+      /** "بعد العصر بـ 15 د" / "15 min after Asr" */
+      formatAnchor: (anchor: Anchor) => {
+        const prayer = strings[PRAYER_LABEL[anchor.prayer]];
+        const minutes = Math.abs(anchor.offsetMin);
+        if (minutes === 0) return `${strings.anchorAt} ${prayer}`;
+        const word = anchor.offsetMin > 0 ? strings.anchorAfter : strings.anchorBefore;
+        return lang === 'ar' ? `${word} ${prayer} بـ ${minutes} ${strings.minutesShort}` : `${minutes} ${strings.minutesShort} ${word} ${prayer}`;
+      },
     };
   }, [lang, region, adjust]);
 }

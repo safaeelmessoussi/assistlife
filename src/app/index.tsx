@@ -9,12 +9,15 @@ import { DayPanel } from '@/components/DayPanel';
 import { MonthView } from '@/components/MonthView';
 import { TimeGrid } from '@/components/TimeGrid';
 import { IconButton, Segmented, Txt } from '@/components/ui';
+import { ISLAMIC_CONTENT } from '@/content/islamic';
 import { googleLayers, useGoogle } from '@/google/store';
-import { useLocale, useNow, usePalette } from '@/hooks';
+import { useLocale, useNow, usePalette, usePrayerTimes } from '@/hooks';
 import { addMonths, daysInMonth, fromDayNum, monthGrid, startOfWeek, toDayNum, toIso, type DayNum } from '@/lib/dates';
 import { expandEvents, groupByDay } from '@/lib/events';
-import { useStore } from '@/store';
-import { RADIUS, SPACE } from '@/theme';
+import { islamicEvents } from '@/lib/islamic';
+import { resolveAnchor } from '@/lib/prayer';
+import { useStore, type Layer } from '@/store';
+import { RADIUS, SPACE, SYSTEM_COLORS } from '@/theme';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -22,7 +25,9 @@ export default function CalendarScreen() {
   const p = usePalette();
   const router = useRouter();
   const locale = useLocale();
-  const { t, rtl, months, hijriMonths, hijri, hijriCfg } = locale;
+  const { t, rtl, lang, months, hijriMonths, hijri, hijriCfg } = locale;
+  const prayers = usePrayerTimes();
+  const settings = useStore((s) => s.settings);
   const now = useNow();
   const { width } = useWindowDimensions();
   const wide = width >= 900;
@@ -46,18 +51,43 @@ export default function CalendarScreen() {
     return [selected];
   }, [mode, selected, focus.y, focus.m, weekStart]);
 
-  // The user's own layers and the Google calendars they chose to show sit side by side.
-  const layers = useMemo(
-    () => new Map([...ownLayers, ...googleLayers(googleCalendars)].map((l) => [l.id, l])),
-    [ownLayers, googleCalendars],
-  );
+  // The user's own layers, the Google calendars they chose to show, and the computed Islamic layers sit side by side.
+  const layers = useMemo(() => {
+    const system: Layer[] = [
+      { id: 'sys:fasting', name: t('layerFasting'), color: SYSTEM_COLORS['sys:fasting'], visible: true, updatedAt: 0 },
+      { id: 'sys:occasions', name: t('layerOccasions'), color: SYSTEM_COLORS['sys:occasions'], visible: true, updatedAt: 0 },
+      { id: 'sys:athkar', name: t('layerAthkar'), color: SYSTEM_COLORS['sys:athkar'], visible: true, updatedAt: 0 },
+    ];
+    return new Map([...ownLayers, ...googleLayers(googleCalendars), ...system].map((l) => [l.id, l]));
+  }, [ownLayers, googleCalendars, t]);
+
   const byDay = useMemo(() => {
-    const visible = [...ownEvents, ...googleEvents].filter((e) => layers.get(e.layerId)?.visible === true);
     const from = days[0];
     const to = days[days.length - 1];
-    return groupByDay(expandEvents(visible, from, to, hijriCfg), from, to);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownEvents, googleEvents, layers, days, hijriCfg.region, hijriCfg.adjust]);
+    const islamic = islamicEvents(
+      from,
+      to,
+      hijri,
+      {
+        fasting: settings.showFasting,
+        occasions: settings.showOccasions,
+        athkar: settings.showAthkar,
+        monThu: settings.fastMonThu,
+        whiteDays: settings.fastWhiteDays,
+      },
+      (key) => ISLAMIC_CONTENT[key].title[lang],
+    );
+    const visible = [...ownEvents, ...googleEvents, ...islamic].filter((e) => layers.get(e.layerId)?.visible === true);
+    // An event tied to a prayer starts when that prayer falls on its own day.
+    const occurrences = expandEvents(visible, from, to, hijriCfg, (event, day) => resolveAnchor(event.anchor!, prayers(day)));
+    return groupByDay(occurrences, from, to);
+  }, [ownEvents, googleEvents, layers, days, hijri, hijriCfg, prayers, settings, lang]);
+
+  // The month grid leaves out the daily remembrance times: they would fill every cell.
+  const monthByDay = useMemo(
+    () => new Map([...byDay].map(([day, list]) => [day, list.filter((o) => o.event.layerId !== 'sys:athkar' || o.event.allDay)])),
+    [byDay],
+  );
 
   const move = (direction: 1 | -1) => {
     if (mode === 'month') {
@@ -136,7 +166,7 @@ export default function CalendarScreen() {
               weekStart={weekStart}
               selected={selected}
               todayDay={now.day}
-              byDay={byDay}
+              byDay={monthByDay}
               layers={layers}
               onSelect={setSelected}
               onOpenDay={(day) => {
@@ -150,6 +180,7 @@ export default function CalendarScreen() {
               days={days}
               selected={selected}
               now={now}
+              prayers={settings.showPrayers ? prayers : undefined}
               byDay={byDay}
               layers={layers}
               onSelect={(day) => {
@@ -168,6 +199,9 @@ export default function CalendarScreen() {
               day={selected}
               occurrences={byDay.get(selected) ?? []}
               layers={layers}
+              prayers={prayers(selected)}
+              showPrayers={settings.showPrayers}
+              nowMinutes={selected === now.day ? now.minutes : undefined}
               onAdd={() => createEvent(selected)}
               onOpenEvent={openEvent}
             />

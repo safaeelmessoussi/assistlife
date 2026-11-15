@@ -2,7 +2,7 @@
 
 One calendar for a Muslim's whole day — worship, health, work and family — with Hijri and Gregorian dates, built to be lived with the presence of Allah in everything. It later grows into a life assistant.
 
-**Status:** version 1, steps 1 and 2 of 7 are built (calendar core; accounts, encrypted backup and Google Calendar reading). Accounts and Google need the one-time [service setup](docs/SETUP.md). See the [product plan](docs/PLAN.md) and the [ideas list](docs/IDEAS.md).
+**Status:** version 1, steps 1 to 3 of 7 are built (calendar core; accounts, encrypted backup and Google Calendar; Islamic layer). Accounts and Google need the one-time [service setup](docs/SETUP.md). See the [product plan](docs/PLAN.md) and the [ideas list](docs/IDEAS.md).
 
 ## What works today
 
@@ -14,7 +14,9 @@ One calendar for a Muslim's whole day — worship, health, work and family — w
 - Light and dark appearance; phone, tablet and desktop layouts.
 - Everything is saved on the device and works offline.
 - Optional account: end-to-end encrypted backup and sync between devices.
-- Google Calendar events shown inside the calendar (read-only, browser only for now).
+- Google Calendar inside the calendar: read, create, change and delete (browser only for now).
+- Islamic layer: prayer times, fasting days and occasions with their sources, remembrance times, Friday items, events tied to a prayer, and a warning when an event covers a prayer's whole time.
+- Android test app built automatically and offered for download from the settings.
 
 ## Run it
 

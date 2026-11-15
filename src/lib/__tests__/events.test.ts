@@ -101,6 +101,19 @@ describe('expandEvents', () => {
   });
 });
 
+describe('prayer-tied events', () => {
+  it('take their start from the day they fall on', () => {
+    const lesson = ev('2026-11-16', { freq: 'daily', interval: 1 }, { anchor: { prayer: 'asr', offsetMin: 15 }, startMin: 0, durationMin: 30 });
+    // A stand-in for prayer times: Asr one minute later each day.
+    const startOn = (_: CalEvent, d: number) => 16 * 60 + (d - day('2026-11-16')) + 15;
+    const occ = expandEvents([lesson], day('2026-11-16'), day('2026-11-18'), MA, startOn);
+    expect(occ.map((o) => o.event.startMin)).toEqual([975, 976, 977]);
+    expect(occ[0].event.id).toBe('e');
+    // Without prayer times the fallback time is kept.
+    expect(expandEvents([lesson], day('2026-11-16'), day('2026-11-16'), MA)[0].event.startMin).toBe(0);
+  });
+});
+
 describe('layoutColumns', () => {
   it('puts overlapping items side by side', () => {
     const items = [

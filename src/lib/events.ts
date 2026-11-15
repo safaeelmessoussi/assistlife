@@ -30,6 +30,8 @@ export type CalEvent = {
   spanDays: number;
   /** Timed events: minutes since midnight. */
   startMin: number;
+  /** Timed events: when set, the start follows a prayer time and `startMin` is only a fallback. */
+  anchor?: { prayer: 'fajr' | 'sunrise' | 'dhuhr' | 'asr' | 'maghrib' | 'isha'; offsetMin: number };
   /** Timed events: length in minutes; may run past midnight. */
   durationMin: number;
   repeat?: Repeat;
@@ -126,14 +128,23 @@ function startDays(event: CalEvent, from: DayNum, to: DayNum, hijri: HijriConfig
 }
 
 /** Every occurrence that touches at least one day in [from, to], in start order. */
-export function expandEvents(events: CalEvent[], from: DayNum, to: DayNum, hijri: HijriConfig): Occurrence[] {
+export function expandEvents(
+  events: CalEvent[],
+  from: DayNum,
+  to: DayNum,
+  hijri: HijriConfig,
+  /** Start time of a prayer-tied event on a given day. Without it such events keep their fallback time. */
+  startOn?: (event: CalEvent, day: DayNum) => number,
+): Occurrence[] {
   const out: Occurrence[] = [];
   for (const event of events) {
     // Look back far enough to catch occurrences that began before `from` and still run.
-    const reach = endDayOf(event, 0);
+    const reach = endDayOf(event, 0) + (event.anchor ? 1 : 0);
     for (const day of startDays(event, from - reach, to, hijri)) {
-      const endDay = endDayOf(event, day);
-      if (endDay >= from) out.push({ event, day, endDay });
+      // A prayer-tied occurrence carries the time it has on its own day.
+      const placed = event.anchor && startOn && !event.allDay ? { ...event, startMin: startOn(event, day) } : event;
+      const endDay = endDayOf(placed, day);
+      if (endDay >= from) out.push({ event: placed, day, endDay });
     }
   }
   return out.sort(compareOccurrences);

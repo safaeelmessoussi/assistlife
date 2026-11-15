@@ -11,7 +11,9 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { STRINGS, type Lang, type StringKey } from '@/i18n/strings';
 import type { CalEvent } from '@/lib/events';
+import { DEFAULT_PLACE } from '@/data/cities';
 import type { HijriRegionId } from '@/lib/hijri/engine';
+import type { Place, PrayerMethod } from '@/lib/prayer';
 import type { Snapshot, Tombstones } from '@/lib/sync/merge';
 import { LAYER_COLORS } from '@/theme';
 
@@ -32,6 +34,19 @@ export type Settings = {
   hijriRegion: HijriRegionId;
   hijriAdjust: number;
   theme: 'system' | 'light' | 'dark';
+  /** Where prayer times are computed for. */
+  place: Place;
+  prayerMethod: PrayerMethod;
+  /** Asr by the Hanafi school (later) instead of the majority's. */
+  asrHanafi: boolean;
+  showPrayers: boolean;
+  showFasting: boolean;
+  fastMonThu: boolean;
+  fastWhiteDays: boolean;
+  showOccasions: boolean;
+  showAthkar: boolean;
+  /** Announce prayers and remembrance times while the app is open. */
+  notify: boolean;
 };
 
 export type EventDraft = Omit<CalEvent, 'id' | 'createdAt' | 'updatedAt'>;
@@ -69,6 +84,16 @@ export const DEFAULT_SETTINGS: Settings = {
   hijriRegion: 'MA',
   hijriAdjust: 0,
   theme: 'system',
+  place: DEFAULT_PLACE,
+  prayerMethod: 'morocco',
+  asrHanafi: false,
+  showPrayers: true,
+  showFasting: true,
+  fastMonThu: true,
+  fastWhiteDays: true,
+  showOccasions: true,
+  showAthkar: true,
+  notify: false,
 };
 
 export const useStore = create<State>()(

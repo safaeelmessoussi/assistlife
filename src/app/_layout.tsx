@@ -14,6 +14,7 @@ import { AppState, Platform, View } from 'react-native';
 
 import { refreshGoogleIfPossible } from '@/google/store';
 import { useLocale, usePalette } from '@/hooks';
+import { startNotifier } from '@/notify';
 import { useStore } from '@/store';
 import { startSync } from '@/sync/account';
 import { DARK } from '@/theme';
@@ -40,6 +41,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!hydrated) return;
     startSync();
+    startNotifier();
     const focus = AppState.addEventListener('change', (status) => {
       if (status === 'active') void refreshGoogleIfPossible();
     });

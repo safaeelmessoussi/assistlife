@@ -6,6 +6,7 @@ import { Txt } from '@/components/ui';
 import { useLocale, usePalette } from '@/hooks';
 import { formatTime, fromDayNum, weekday, type DayNum } from '@/lib/dates';
 import { layoutColumns, minutesOnDay, type Occurrence } from '@/lib/events';
+import { PRAYERS, type DayPrayers } from '@/lib/prayer';
 import type { Layer } from '@/store';
 import { RADIUS, tint } from '@/theme';
 
@@ -17,6 +18,8 @@ type Props = {
   days: DayNum[];
   selected: DayNum;
   now: { day: DayNum; minutes: number };
+  /** When given, each day shows a fine line at every prayer time. */
+  prayers?: (day: DayNum) => DayPrayers;
   byDay: Map<DayNum, Occurrence[]>;
   layers: Map<string, Layer>;
   onSelect: (day: DayNum) => void;
@@ -24,9 +27,9 @@ type Props = {
   onOpenEvent: (id: string) => void;
 };
 
-export function TimeGrid({ days, selected, now, byDay, layers, onSelect, onCreate, onOpenEvent }: Props) {
+export function TimeGrid({ days, selected, now, prayers, byDay, layers, onSelect, onCreate, onOpenEvent }: Props) {
   const p = usePalette();
-  const { weekdays, hijri, hijriMonths, t } = useLocale();
+  const { weekdays, hijri, hijriMonths, t, prayerName } = useLocale();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const single = days.length === 1;
   const { width } = useWindowDimensions();
@@ -129,6 +132,22 @@ export function TimeGrid({ days, selected, now, byDay, layers, onSelect, onCreat
                   />
                 ))}
 
+                {prayers &&
+                  PRAYERS.map((name) => {
+                    const at = prayers(day)[name];
+                    if (at < 0) return null;
+                    return (
+                      <View key={name} pointerEvents="none" style={[styles.prayerLine, { top: (at / 60) * HOUR_H }]} testID={single ? `mark-${name}` : undefined}>
+                        <View style={[styles.prayerRule, { backgroundColor: p.gold, opacity: name === 'sunrise' ? 0.35 : 0.7 }]} />
+                        {showTimes && (
+                          <Txt size={9} weight="medium" color={p.gold} style={[styles.prayerLabel, { backgroundColor: p.surface }]} numberOfLines={1}>
+                            {single ? `${prayerName(name)} ${formatTime(at)}` : prayerName(name)}
+                          </Txt>
+                        )}
+                      </View>
+                    );
+                  })}
+
                 {placed.map(({ item: occ, column, columns }) => {
                   const { start, end } = minutesOnDay(occ, day);
                   const color = layers.get(occ.event.layerId)?.color ?? p.muted;
@@ -196,5 +215,8 @@ const styles = StyleSheet.create({
   event: { position: 'absolute', paddingHorizontal: 1 },
   eventBack: { flex: 1, borderRadius: 5, overflow: 'hidden' },
   eventCard: { flex: 1, borderRadius: 5, borderStartWidth: 3, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
+  prayerLine: { position: 'absolute', left: 0, right: 0, height: 12, marginTop: -6, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  prayerRule: { position: 'absolute', left: 0, right: 0, top: 6, height: 1 },
+  prayerLabel: { paddingHorizontal: 3, lineHeight: 12 },
   nowLine: { position: 'absolute', left: 0, right: 0, height: 2 },
 });

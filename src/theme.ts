@@ -61,6 +61,9 @@ export const RADIUS = { sm: 6, md: 10, lg: 16, pill: 999 } as const;
 /** Layer colours, chosen to stay distinct from each other in both themes. */
 export const LAYER_COLORS = ['#0F8B6F', '#C08A1E', '#C2543C', '#7A5AC2', '#2F7EC4', '#B8477F', '#5C8A2E', '#6E7A86'];
 
+/** Colours of the computed layers: fasting days, occasions, remembrance. */
+export const SYSTEM_COLORS = { 'sys:fasting': '#B8862B', 'sys:occasions': '#0F8B6F', 'sys:athkar': '#7A5AC2' } as const;
+
 /** A translucent tint of a layer colour, for event backgrounds. */
 export function tint(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);

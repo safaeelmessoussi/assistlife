@@ -209,7 +209,7 @@ Delivered in testable steps:
 
 1. **Calendar core**: month, week and day views, dual dates, Hijri engine, layers, events, Arabic first. ✅ Built — see the notes below.
 2. **Google Calendar sync** and accounts with encrypted backup. 🔶 Built and tested against simulated servers; waiting for the real services — see the notes below.
-3. **Islamic layer**: prayer times, fasting days, athkar, Friday mode, prayer-anchored events and conflicts.
+3. **Islamic layer**: prayer times, fasting days, athkar, Friday mode, prayer-anchored events and conflicts. ✅ Built — see the notes below.
 4. **Health layer**: medications, sport, diet, appointments, fasting-aware reminders.
 5. **Today screen** with the daily card and the voice of the app.
 6. **Print**: day, week and month with automatic paper size.
@@ -229,6 +229,22 @@ Delivered in testable steps:
 - **Google Calendar is two-way** and runs entirely in the browser: events can be created, changed and deleted in calendars the user may write to (one occurrence at a time for Google's repeating events; calendars shared read-only stay read-only). Google gives the browser a one-hour access token, which is kept in memory only. No Google credential reaches our server, so no server workers are needed (a change from the original plan, for privacy and simplicity). Repeating events arrive already expanded by Google. The copy of the Google events, the connected account's address and the choice of shown calendars travel in the encrypted backup, so every device shows the same calendar even if it never connected to Google itself; it is as fresh as the last refresh on any device.
 - **Limits to lift later**: changing a whole Google repeating series from the app; moving an event between a Google calendar and an own calendar; refreshing Google without a tap after the hour (needs the phone app's sign-in, which comes with the Android build in step 7); Google sign-in inside the phone app; changing the account password; deleting the account from inside the app.
 - **Verified**: unit tests for encryption, merging, the sync round and Google's event format; a two-device browser test against simulated account and Google servers. **Not yet verified against the real Supabase and Google services** — that needs the setup in [SETUP.md](SETUP.md).
+
+#### Step 3 notes
+
+- **Prayer times** come from the `adhan` library (a vetted open-source implementation) rather than our own astronomy. The Moroccan method follows the Ministry of Habous settings (Fajr 19°, Isha 17°, its customary safety minutes); six other methods and the Hanafi Asr are settings. City list with search; no automatic location yet.
+- **Fasting days and occasions** are computed from the Hijri date, never stored: Ramadan, Arafah and the days before it, Ashura with the day before, six of Shawwal, the white days, Mondays and Thursdays; the Hijri new year, the start of Ramadan, its last ten nights, the two Eids and the days of Tashriq. No fast is ever shown on a day when fasting is not allowed.
+- **Remembrance and Friday**: morning, evening and bedtime remembrance tied to Fajr, Asr and Isha; Al-Kahf and the last hour before Maghrib on Fridays. They show in the day and week views and the day list, not in month cells.
+- **Every such item opens an explanation** with its verse or hadith in Arabic and its source. All of this content is marked pending scholar review (`src/content/islamic.ts`).
+- **Events tied to a prayer** ("15 minutes after Asr") move with the prayer through the year. **An event that covers a prayer's whole time** is flagged in the form and in the day list.
+- **Alerts** work in a browser while the app is open. Alerts with the app closed need the phone app's scheduler: not built yet.
+- **Not in step 3**: the texts of the remembrances themselves, qibla, Ramadan mode, the make-up tracker, Quran plans (all planned for later phases); events tied to a prayer inside Google calendars.
+
+#### Android test app
+
+- A GitHub workflow builds the Android app file from `main` on every change and publishes it as the `android-latest` release; the settings screen on the web has a download row.
+- It is signed with the project template's test key: fine for testing, not for a store.
+- **Not verified on a device from the development side.** Known gaps on the phone app: Google Calendar sign-in (browser only for now) and alerts.
 
 ### Phase 2 — cycle and make-up
 

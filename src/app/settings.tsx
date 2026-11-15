@@ -8,13 +8,26 @@ import { Card, Row, ScreenHeader, SectionTitle, Toggle } from '@/components/form
 import { Button, Confirm, IconButton, Segmented, Sheet, Txt } from '@/components/ui';
 import { ANDROID_APP_URL } from '@/config';
 import { useLocale, usePalette } from '@/hooks';
-import { LANGS } from '@/i18n/strings';
+import { CITIES } from '@/data/cities';
+import { LANGS, type StringKey } from '@/i18n/strings';
+import { PRAYER_METHODS, type PrayerMethod } from '@/lib/prayer';
+import { requestNotifications } from '@/notify';
 import { today } from '@/lib/dates';
 import { layerName, useStore, type Layer } from '@/store';
 import { useAccount } from '@/sync/account';
 import { FONT, LAYER_COLORS, RADIUS, SPACE } from '@/theme';
 
 type Editing = { layer: Layer | null; name: string; color: string };
+
+const METHOD_LABEL: Record<PrayerMethod, StringKey> = {
+  morocco: 'methodMorocco',
+  mwl: 'methodMwl',
+  ummAlQura: 'methodUmmAlQura',
+  egypt: 'methodEgypt',
+  karachi: 'methodKarachi',
+  northAmerica: 'methodNorthAmerica',
+  turkey: 'methodTurkey',
+};
 
 export default function SettingsScreen() {
   const p = usePalette();
@@ -27,6 +40,18 @@ export default function SettingsScreen() {
   const accountEmail = useAccount((a) => a.email);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [deleting, setDeleting] = useState<Layer | null>(null);
+  const [sheet, setSheet] = useState<'city' | 'method' | null>(null);
+  const [search, setSearch] = useState('');
+  const [notifyDenied, setNotifyDenied] = useState(false);
+
+  const query = search.trim().toLowerCase();
+  const cities = CITIES.filter((c) => !query || c.ar.includes(search.trim()) || c.latin.toLowerCase().includes(query));
+
+  const toggleNotify = async (on: boolean) => {
+    setNotifyDenied(false);
+    if (on && !(await requestNotifications())) return setNotifyDenied(true);
+    updateSettings({ notify: on });
+  };
 
   const saveLayer = () => {
     if (!editing) return;
@@ -124,6 +149,53 @@ export default function SettingsScreen() {
           {t('hijriAdjustHint')}
         </Txt>
 
+        <SectionTitle>{t('worship')}</SectionTitle>
+        <Card>
+          <Row icon="location-outline" label={t('place')} value={settings.place.name} onPress={() => setSheet('city')} testID="place-row" />
+          <Row icon="calculator-outline" label={t('prayerMethod')} value={t(METHOD_LABEL[settings.prayerMethod])} onPress={() => setSheet('method')} testID="method-row" />
+          <Row icon="partly-sunny-outline" label={t('asrSchool')} last>
+            <View style={{ width: 190 }}>
+              <Segmented
+                testID="asr"
+                value={settings.asrHanafi ? 'hanafi' : 'majority'}
+                onChange={(v) => updateSettings({ asrHanafi: v === 'hanafi' })}
+                options={[
+                  { value: 'majority', label: t('asrMajority') },
+                  { value: 'hanafi', label: t('asrHanafi') },
+                ]}
+              />
+            </View>
+          </Row>
+        </Card>
+        <Txt size={12} color={p.muted} style={styles.hint}>
+          {t('prayerHint')}
+        </Txt>
+        <View style={{ height: SPACE.md }} />
+        <Card>
+          {(
+            [
+              ['showPrayers', 'showPrayers'],
+              ['showFasting', 'showFasting'],
+              ['fastMonThu', 'fastMonThuOpt'],
+              ['fastWhiteDays', 'fastWhiteOpt'],
+              ['showOccasions', 'showOccasions'],
+              ['showAthkar', 'showAthkar'],
+            ] as const
+          )
+            .filter(([key]) => settings.showFasting || (key !== 'fastMonThu' && key !== 'fastWhiteDays'))
+            .map(([key, label]) => (
+              <Row key={key} label={`${key === 'fastMonThu' || key === 'fastWhiteDays' ? '     ' : ''}${t(label)}`}>
+                <Toggle value={settings[key]} onChange={(value) => updateSettings({ [key]: value })} label={t(label)} testID={`toggle-${key}`} />
+              </Row>
+            ))}
+          <Row label={t('notify')} last>
+            <Toggle value={settings.notify} onChange={(value) => void toggleNotify(value)} label={t('notify')} testID="toggle-notify" />
+          </Row>
+        </Card>
+        <Txt size={12} color={notifyDenied ? p.danger : p.muted} style={styles.hint} testID="notify-hint">
+          {t(notifyDenied ? 'notifyDenied' : 'notifyHint')}
+        </Txt>
+
         <SectionTitle>{t('appearance')}</SectionTitle>
         <Segmented
           testID="theme"
@@ -155,6 +227,53 @@ export default function SettingsScreen() {
           </>
         )}
       </ScrollView>
+
+      {sheet === 'city' && (
+        <Sheet title={t('place')} onClose={() => setSheet(null)} testID="city-sheet">
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t('searchCity')}
+            placeholderTextColor={p.faint}
+            accessibilityLabel={t('searchCity')}
+            testID="city-search"
+            style={[styles.input, { color: p.text, borderColor: p.border, fontFamily: FONT.regular, marginBottom: SPACE.md }]}
+          />
+          {cities.map((city) => {
+            const name = lang === 'ar' ? city.ar : city.latin;
+            return (
+              <Row
+                key={city.latin}
+                icon={Math.abs(city.lat - settings.place.lat) < 0.001 && Math.abs(city.lon - settings.place.lon) < 0.001 ? 'radio-button-on' : 'radio-button-off'}
+                label={name}
+                testID={`city-${city.latin}`}
+                onPress={() => {
+                  updateSettings({ place: { name, lat: city.lat, lon: city.lon } });
+                  setSearch('');
+                  setSheet(null);
+                }}
+              />
+            );
+          })}
+        </Sheet>
+      )}
+
+      {sheet === 'method' && (
+        <Sheet title={t('prayerMethod')} onClose={() => setSheet(null)} testID="method-sheet">
+          {PRAYER_METHODS.map((method) => (
+            <Row
+              key={method}
+              icon={settings.prayerMethod === method ? 'radio-button-on' : 'radio-button-off'}
+              label={t(METHOD_LABEL[method])}
+              testID={`method-${method}`}
+              onPress={() => {
+                updateSettings({ prayerMethod: method });
+                setSheet(null);
+              }}
+            />
+          ))}
+        </Sheet>
+      )}
 
       {editing && (
         <Sheet

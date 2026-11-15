@@ -6,7 +6,10 @@ New ideas land here in any form. Before each build step we review the list and g
 
 | Date | Idea | Outcome |
 |---|---|---|
-| | | |
+| 2026-11-15 | Show the Mawlid (12 Rabi al-Awwal) as an occasion — it is a public holiday in Morocco; left out for now pending the owner's choice | |
+| 2026-11-15 | Full texts of the morning, evening and bedtime remembrances inside the app, with a counter | |
+| 2026-11-15 | Automatic location for prayer times (asks the device) in addition to the city list | |
+| 2026-11-15 | Per-prayer minute adjustment to match a specific mosque's timetable | |
 
 ## Decided
 
