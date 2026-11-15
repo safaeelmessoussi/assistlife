@@ -3,9 +3,10 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 
 import { accountsConfigured } from '@/config';
+import { applyGoogleBlock, googleBlock, useGoogle } from '@/google/store';
 import { deriveKeys, normalizeEmail } from '@/lib/sync/crypto';
 import { syncOnce, WrongKeyError } from '@/lib/sync/engine';
-import { currentSnapshot, useStore } from '@/store';
+import { currentSnapshot, useStore, type AppSnapshot } from '@/store';
 
 import { backend, vaultRemote } from './backend';
 import { clearEncKey, loadEncKey, saveEncKey } from './secrets';
@@ -29,6 +30,11 @@ let again = false;
 /** True while a sync writes its result into the store, so that write does not trigger another sync. */
 let applying = false;
 
+/** Everything that appears in the calendar: the user's own data plus the copy of their outside calendars. */
+function fullSnapshot(): AppSnapshot {
+  return { ...currentSnapshot(), blocks: { google: googleBlock() } };
+}
+
 /** Bring this device and the backup into agreement. Calls made while one runs are folded into one follow-up. */
 export function syncNow(): Promise<void> {
   if (!userId || !encKey) return Promise.resolve();
@@ -43,10 +49,12 @@ export function syncNow(): Promise<void> {
     try {
       do {
         again = false;
-        const outcome = await syncOnce(currentSnapshot(), vaultRemote(uid), key);
+        const outcome = await syncOnce(fullSnapshot(), vaultRemote(uid), key);
         if (outcome.pulled) {
           applying = true;
           useStore.getState().applySnapshot(outcome.snapshot);
+          const google = outcome.snapshot.blocks?.google;
+          if (google) applyGoogleBlock(google);
           applying = false;
         }
       } while (again);
@@ -142,6 +150,11 @@ export function startSync(): void {
       state.settings !== previous.settings ||
       state.tombstones !== previous.tombstones;
     if (!changed) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => void syncNow(), 3000);
+  });
+  useGoogle.subscribe((state, previous) => {
+    if (applying || !userId || state.updatedAt === previous.updatedAt) return;
     clearTimeout(timer);
     timer = setTimeout(() => void syncNow(), 3000);
   });

@@ -16,7 +16,23 @@ export type Snapshot<Settings, Layer extends Stamped, Event extends Stamped> = {
   events: Event[];
   /** Deleted record id → time of deletion. */
   tombstones: { layers: Tombstones; events: Tombstones };
+  /**
+   * Whole blocks of data that are replaced as one piece, newest first — for
+   * example the copy of an outside calendar. Absent in backups written before
+   * blocks existed.
+   */
+  blocks?: Record<string, Block>;
 };
+
+export type Block = { updatedAt: number; data: unknown };
+
+function mergeBlocks(a: Record<string, Block> = {}, b: Record<string, Block> = {}): Record<string, Block> {
+  const out: Record<string, Block> = { ...a };
+  for (const [name, block] of Object.entries(b)) {
+    if (!out[name] || block.updatedAt > out[name].updatedAt) out[name] = block;
+  }
+  return out;
+}
 
 /** Tombstones older than this are dropped; a device offline for longer may resurrect a record. */
 export const TOMBSTONE_TTL_MS = 180 * 24 * 60 * 60 * 1000;
@@ -61,6 +77,7 @@ export function mergeSnapshots<S, L extends Stamped, E extends Stamped>(
     layers: layers.length ? layers : local.layers.length ? local.layers : remote.layers,
     events: mergeRecords(local.events, remote.events, tombstones.events),
     tombstones,
+    blocks: mergeBlocks(local.blocks, remote.blocks),
   };
 }
 
@@ -81,6 +98,8 @@ export function fingerprint(snapshot: Snapshot<unknown, Stamped, Stamped>): stri
   return JSON.stringify(
     sortKeys({
       ...snapshot,
+      // A block that was never filled counts the same as no block at all.
+      blocks: Object.fromEntries(Object.entries(snapshot.blocks ?? {}).filter(([, block]) => block.updatedAt > 0)),
       layers: [...snapshot.layers].sort(byId),
       events: [...snapshot.events].sort(byId),
     }),

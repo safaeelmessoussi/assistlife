@@ -94,6 +94,15 @@ describe('mergeSnapshots', () => {
     expect(merged.tombstones.events).toEqual({});
   });
 
+  it('replaces a whole block with the newest copy', () => {
+    const local = snap({ blocks: { google: { updatedAt: 5, data: ['old'] }, other: { updatedAt: 9, data: 'keep' } } });
+    const remote = snap({ blocks: { google: { updatedAt: 7, data: ['new'] }, other: { updatedAt: 1, data: 'stale' } } });
+    const merged = mergeSnapshots(local, remote, 10);
+    expect(merged.blocks).toEqual({ google: { updatedAt: 7, data: ['new'] }, other: { updatedAt: 9, data: 'keep' } });
+    // A backup written before blocks existed leaves the device's blocks alone.
+    expect(mergeSnapshots(local, snap(), 10).blocks).toEqual(local.blocks);
+  });
+
   it('never leaves the user without a layer', () => {
     const local = snap({ tombstones: { layers: { l1: 9 }, events: {} } });
     expect(mergeSnapshots(local, snap(), 10).layers).toHaveLength(1);
@@ -131,6 +140,17 @@ describe('syncOnce', () => {
     await syncOnce(laptop, remote, KEY, 10);
     phone = (await syncOnce(phone, remote, KEY, 10)).snapshot;
     expect(phone.events.map((e) => e.id)).toEqual(['l']);
+  });
+
+  it('carries a block to a device that never had it, and uploads nothing for an empty one', async () => {
+    const remote = new FakeRemote();
+    await syncOnce(snap({ blocks: { google: { updatedAt: 0, data: null } } }), remote, KEY, 10);
+    await syncOnce(snap(), remote, KEY, 10);
+    expect(remote.pushes).toBe(1); // an unfilled block is not a change
+    await syncOnce(snap({ blocks: { google: { updatedAt: 4, data: { events: ['e'] } } } }), remote, KEY, 10);
+    const other = await syncOnce(snap({ blocks: { google: { updatedAt: 0, data: null } } }), remote, KEY, 10);
+    expect(other.pulled).toBe(true);
+    expect(other.snapshot.blocks!.google).toEqual({ updatedAt: 4, data: { events: ['e'] } });
   });
 
   it('merges instead of overwriting when another device writes first', async () => {

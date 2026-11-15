@@ -22,14 +22,43 @@ type GoogleState = {
   /** A copy of the shown calendars' events, so they display offline and before a refresh. */
   events: CalEvent[];
   lastRefreshAt: number | null;
+  /** When the account, the shown calendars or the events last changed; decides which device's copy is newest. */
+  updatedAt: number;
   status: 'idle' | 'refreshing' | 'error';
 };
 
+/** The part of the Google state that travels in the encrypted backup, so every device shows the same calendar. */
+export type GoogleBlock = Pick<GoogleState, 'email' | 'calendars' | 'events' | 'lastRefreshAt'>;
+
+export function googleBlock(): { updatedAt: number; data: GoogleBlock } {
+  const { email, calendars, events, lastRefreshAt, updatedAt } = useGoogle.getState();
+  return { updatedAt, data: { email, calendars, events, lastRefreshAt } };
+}
+
+/** Take over the copy another device put in the backup. */
+export function applyGoogleBlock(block: { updatedAt: number; data: unknown }): void {
+  const data = block.data as Partial<GoogleBlock> | null;
+  if (!data || block.updatedAt <= useGoogle.getState().updatedAt) return;
+  useGoogle.setState({
+    email: data.email ?? null,
+    calendars: data.calendars ?? [],
+    events: data.events ?? [],
+    lastRefreshAt: data.lastRefreshAt ?? null,
+    updatedAt: block.updatedAt,
+  });
+}
+
 export const useGoogle = create<GoogleState>()(
-  persist((): GoogleState => ({ email: null, calendars: [], events: [], lastRefreshAt: null, status: 'idle' }), {
+  persist((): GoogleState => ({ email: null, calendars: [], events: [], lastRefreshAt: null, updatedAt: 0, status: 'idle' }), {
     name: 'assistlife/google/v1',
     storage: createJSONStorage(() => AsyncStorage),
-    partialize: ({ email, calendars, events, lastRefreshAt }) => ({ email, calendars, events, lastRefreshAt }),
+    partialize: ({ email, calendars, events, lastRefreshAt, updatedAt }) => ({ email, calendars, events, lastRefreshAt, updatedAt }),
+    merge: (saved, current) => {
+      const data = { ...current, ...(saved as Partial<GoogleState> | undefined) };
+      // A connection made before the copy travelled in the backup has no change time yet.
+      if (data.email !== null && !data.updatedAt) data.updatedAt = data.lastRefreshAt ?? Date.now();
+      return data;
+    },
   }),
 );
 
@@ -91,6 +120,7 @@ async function refreshWith(token: string): Promise<void> {
       calendars,
       events: lists.flat().filter((e): e is CalEvent => e !== null),
       lastRefreshAt: Date.now(),
+      updatedAt: Date.now(),
       status: 'idle',
     });
   } catch (error) {
@@ -124,12 +154,13 @@ export function setCalendarShown(id: string, shown: boolean): void {
     calendars: s.calendars.map((c) => (c.id === id ? { ...c, shown } : c)),
     // Hiding takes effect at once; showing needs the events, fetched below when possible.
     events: shown ? s.events : s.events.filter((e) => e.layerId !== googleLayerId(id)),
+    updatedAt: Date.now(),
   }));
   if (shown) void refreshGoogleIfPossible();
 }
 
 export async function disconnectGoogle(): Promise<void> {
-  useGoogle.setState({ email: null, calendars: [], events: [], lastRefreshAt: null, status: 'idle' });
+  useGoogle.setState({ email: null, calendars: [], events: [], lastRefreshAt: null, updatedAt: Date.now(), status: 'idle' });
   await revokeToken();
 }
 
