@@ -35,6 +35,8 @@ export type CalEvent = {
   repeat?: Repeat;
   location?: string;
   notes?: string;
+  /** Set on events that come from an outside calendar: where to open them there. */
+  link?: string;
   createdAt: number;
   updatedAt: number;
 };

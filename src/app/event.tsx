@@ -1,16 +1,18 @@
 /** Create or edit an event. */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, Chip, Row, ScreenHeader, Toggle } from '@/components/form';
 import { DatePickerSheet, TimePickerSheet } from '@/components/pickers';
 import { Button, Confirm, IconButton, Sheet, Txt } from '@/components/ui';
+import { useGoogle } from '@/google/store';
 import { useLocale, usePalette } from '@/hooks';
 import type { StringKey } from '@/i18n/strings';
 import { MIN_PER_DAY, formatTime, parseIso, today, toIso, weekday, type DayNum } from '@/lib/dates';
 import type { RepeatFreq } from '@/lib/events';
+import { googleLayerId, isGoogleId } from '@/lib/google';
 import { layerName, useStore, type EventDraft } from '@/store';
 import { FONT, RADIUS, SPACE } from '@/theme';
 
@@ -28,6 +30,61 @@ const REPEAT_OPTIONS = Object.keys(REPEAT_LABEL) as (RepeatFreq | 'none')[];
 type Picker = 'date' | 'endDate' | 'start' | 'end' | 'repeat' | 'until' | 'delete' | null;
 
 export default function EventScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  return isGoogleId(id) ? <GoogleEventView id={id!} /> : <EventForm />;
+}
+
+/** An event that lives in Google Calendar: shown, not edited here. */
+function GoogleEventView({ id }: { id: string }) {
+  const p = usePalette();
+  const { t, weekdayName, formatGregorian, formatHijri } = useLocale();
+  const event = useGoogle((g) => g.events.find((e) => e.id === id));
+  const calendar = useGoogle((g) => g.calendars.find((c) => googleLayerId(c.id) === event?.layerId));
+  const day = parseIso(event?.date) ?? today();
+
+  return (
+    <SafeAreaView style={[styles.root, { backgroundColor: p.bg }]}>
+      <ScreenHeader title={t('googleEvent')} />
+      {event && (
+        <ScrollView contentContainerStyle={styles.content}>
+          <Txt weight="bold" size={22} style={{ marginBottom: SPACE.lg }} testID="google-event-title">
+            {event.title}
+          </Txt>
+          <Card>
+            <Row icon="calendar-outline" label={t('date')}>
+              <View style={styles.dual}>
+                <Txt weight="medium" numberOfLines={1}>
+                  {weekdayName(day)} {formatGregorian(day)}
+                </Txt>
+                <Txt size={12} color={p.gold} numberOfLines={1}>
+                  {formatHijri(day)}
+                </Txt>
+              </View>
+            </Row>
+            <Row
+              icon="time-outline"
+              label={event.allDay ? t('allDay') : t('starts')}
+              value={event.allDay ? (event.spanDays > 1 ? `${event.spanDays} ${t('days')}` : '') : `${formatTime(event.startMin)} – ${formatTime(event.startMin + event.durationMin)}`}
+            />
+            {event.location && <Row icon="location-outline" label={t('location')} value={event.location} />}
+            <Row icon="logo-google" label={t('layer')} value={calendar?.name ?? ''} last />
+          </Card>
+          {event.notes && (
+            <Txt color={p.muted} style={{ marginTop: SPACE.lg }}>
+              {event.notes}
+            </Txt>
+          )}
+          <Txt size={13} color={p.muted} style={{ marginVertical: SPACE.lg }}>
+            {t('googleReadOnly')}
+          </Txt>
+          {event.link && <Button label={t('openInGoogle')} icon="open-outline" kind="ghost" onPress={() => void Linking.openURL(event.link!)} testID="open-in-google" />}
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
+}
+
+function EventForm() {
   const p = usePalette();
   const router = useRouter();
   const { t, lang, weekdays, weekdayName, formatGregorian, formatHijri } = useLocale();

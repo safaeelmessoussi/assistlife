@@ -8,10 +8,12 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Platform, View } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
 
+import { refreshGoogleIfPossible } from '@/google/store';
 import { useLocale, usePalette } from '@/hooks';
 import { useStore } from '@/store';
+import { startSync } from '@/sync/account';
 import { DARK } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -31,6 +33,16 @@ export default function RootLayout() {
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+
+  // Sync starts only once the device's own data is loaded, so it never uploads an empty calendar.
+  useEffect(() => {
+    if (!hydrated) return;
+    startSync();
+    const focus = AppState.addEventListener('change', (status) => {
+      if (status === 'active') void refreshGoogleIfPossible();
+    });
+    return () => focus.remove();
+  }, [hydrated]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;

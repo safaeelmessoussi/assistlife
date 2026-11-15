@@ -208,7 +208,7 @@ Known risks to handle during the build:
 Delivered in testable steps:
 
 1. **Calendar core**: month, week and day views, dual dates, Hijri engine, layers, events, Arabic first. ✅ Built — see the notes below.
-2. **Google Calendar sync** and accounts with encrypted backup.
+2. **Google Calendar sync** and accounts with encrypted backup. 🔶 Built and tested against simulated servers; waiting for the real services — see the notes below.
 3. **Islamic layer**: prayer times, fasting days, athkar, Friday mode, prayer-anchored events and conflicts.
 4. **Health layer**: medications, sport, diet, appointments, fasting-aware reminders.
 5. **Today screen** with the daily card and the voice of the app.
@@ -221,6 +221,14 @@ Delivered in testable steps:
 - **Hijri engine check**: the Morocco estimate reproduces the announced starts of Ramadan 1446, Shawwal 1446, Dhul Hijjah 1446, Muharram 1447 and Ramadan 1447; the Mecca estimate reproduces the calculated calendar for the same period.
 - **Storage** is a simple on-device store behind one module (`src/store`). It is replaced by a synced database in step 2 without changing the screens.
 - **Not in step 1**: changing or deleting a single occurrence of a repeating event (edits apply to the whole series); "every 2 weeks"-style intervals in the form (the engine supports them); corrections delivered from the server (they are bundled for now).
+
+#### Step 2 notes
+
+- **Accounts are optional.** Signing in uses e-mail and one password. The password is stretched on the device into two secrets: one signs in, the other encrypts. The server never receives the password or the encryption key, so the whole backup (not only health data) is unreadable to it. The price: a forgotten password cannot open the backup; the data on the device is unaffected.
+- **Backup and sync**: one encrypted document per account with a revision number. Devices merge record by record (newest change wins, deletions are remembered) and never overwrite each other blindly. Sync runs at launch, a few seconds after a change, when the app returns to the front, and on demand.
+- **Google Calendar is read-only for now** and runs entirely in the browser: Google gives the browser a one-hour access token, which is kept in memory only. No Google credential reaches our server, so no server workers are needed (a change from the original plan, for privacy and simplicity). Repeating events arrive already expanded by Google. Events are kept on the device for offline display and are not part of the backup.
+- **Limits to lift later**: writing to Google (create, edit, delete); refreshing Google without a tap after the hour (needs the phone app's sign-in, which comes with the Android build in step 7); Google sign-in inside the phone app; changing the account password; deleting the account from inside the app.
+- **Verified**: unit tests for encryption, merging, the sync round and Google's event format; a two-device browser test against simulated account and Google servers. **Not yet verified against the real Supabase and Google services** — that needs the setup in [SETUP.md](SETUP.md).
 
 ### Phase 2 — cycle and make-up
 

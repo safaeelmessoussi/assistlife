@@ -9,6 +9,7 @@ import { DayPanel } from '@/components/DayPanel';
 import { MonthView } from '@/components/MonthView';
 import { TimeGrid } from '@/components/TimeGrid';
 import { IconButton, Segmented, Txt } from '@/components/ui';
+import { googleLayers, useGoogle } from '@/google/store';
 import { useLocale, useNow, usePalette } from '@/hooks';
 import { addMonths, daysInMonth, fromDayNum, monthGrid, startOfWeek, toDayNum, toIso, type DayNum } from '@/lib/dates';
 import { expandEvents, groupByDay } from '@/lib/events';
@@ -27,8 +28,10 @@ export default function CalendarScreen() {
   const wide = width >= 900;
 
   const weekStart = useStore((s) => s.settings.weekStart);
-  const events = useStore((s) => s.events);
-  const layerList = useStore((s) => s.layers);
+  const ownEvents = useStore((s) => s.events);
+  const ownLayers = useStore((s) => s.layers);
+  const googleEvents = useGoogle((g) => g.events);
+  const googleCalendars = useGoogle((g) => g.calendars);
 
   const [mode, setMode] = useState<ViewMode>('month');
   const [selected, setSelected] = useState<DayNum>(now.day);
@@ -43,14 +46,18 @@ export default function CalendarScreen() {
     return [selected];
   }, [mode, selected, focus.y, focus.m, weekStart]);
 
-  const layers = useMemo(() => new Map(layerList.map((l) => [l.id, l])), [layerList]);
+  // The user's own layers and the Google calendars they chose to show sit side by side.
+  const layers = useMemo(
+    () => new Map([...ownLayers, ...googleLayers(googleCalendars)].map((l) => [l.id, l])),
+    [ownLayers, googleCalendars],
+  );
   const byDay = useMemo(() => {
-    const visible = events.filter((e) => layers.get(e.layerId)?.visible !== false);
+    const visible = [...ownEvents, ...googleEvents].filter((e) => layers.get(e.layerId)?.visible === true);
     const from = days[0];
     const to = days[days.length - 1];
     return groupByDay(expandEvents(visible, from, to, hijriCfg), from, to);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events, layers, days, hijriCfg.region, hijriCfg.adjust]);
+  }, [ownEvents, googleEvents, layers, days, hijriCfg.region, hijriCfg.adjust]);
 
   const move = (direction: 1 | -1) => {
     if (mode === 'month') {

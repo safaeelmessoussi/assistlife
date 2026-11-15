@@ -1,4 +1,5 @@
 /** Layers (which calendars show, their names and colours) and app settings. */
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ import { useLocale, usePalette } from '@/hooks';
 import { LANGS } from '@/i18n/strings';
 import { today } from '@/lib/dates';
 import { layerName, useStore, type Layer } from '@/store';
+import { useAccount } from '@/sync/account';
 import { FONT, LAYER_COLORS, RADIUS, SPACE } from '@/theme';
 
 type Editing = { layer: Layer | null; name: string; color: string };
@@ -20,6 +22,8 @@ export default function SettingsScreen() {
   const layers = useStore((s) => s.layers);
   const { updateSettings, addLayer, updateLayer, removeLayer } = useStore.getState();
 
+  const router = useRouter();
+  const accountEmail = useAccount((a) => a.email);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [deleting, setDeleting] = useState<Layer | null>(null);
 
@@ -41,6 +45,18 @@ export default function SettingsScreen() {
     <SafeAreaView style={[styles.root, { backgroundColor: p.bg }]}>
       <ScreenHeader title={t('settings')} />
       <ScrollView contentContainerStyle={styles.content}>
+        <SectionTitle>{t('sync')}</SectionTitle>
+        <Card>
+          <Row
+            icon="cloud-outline"
+            label={t('account')}
+            value={accountEmail ?? t('notSignedIn')}
+            onPress={() => router.push('/account')}
+            testID="open-account"
+          />
+          <Row icon="logo-google" label={t('googleCalendar')} value="" onPress={() => router.push('/google')} testID="open-google" last />
+        </Card>
+
         <SectionTitle>{t('layers')}</SectionTitle>
         <Card>
           {layers.map((layer) => (
