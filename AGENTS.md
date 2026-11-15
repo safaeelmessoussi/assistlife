@@ -39,3 +39,10 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Working with the owner
+
+- **Plan first, build on "go".** The roadmap is in `docs/PLAN.md`. Each step starts only on the owner's explicit go-ahead.
+- **End every step by introducing the next one.** After reporting a finished step, say which step comes next and what it covers (what will be built, what the owner will need to provide), so the owner can give the go knowing what it is about.
+- **One branch: `main`.** While the app is a test version, work is committed and pushed to `main` only; no other branch is kept. Every push to `main` republishes https://assistlife.pages.dev, so push only work that passes tests, typecheck, lint and a browser check.
+- **New ideas** go to `docs/IDEAS.md` and are reviewed before each step.

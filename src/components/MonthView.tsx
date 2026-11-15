@@ -27,7 +27,7 @@ type Props = {
 
 export function MonthView({ year, month, weekStart, selected, todayDay, byDay, layers, onSelect, onOpenDay, onSwipe }: Props) {
   const p = usePalette();
-  const { weekdays, hijri, hijriMonths, rtl, t, formatGregorian, formatHijri } = useLocale();
+  const { weekdays, hijri, hijriMonths, rtl, formatGregorian, formatHijri } = useLocale();
   const weeks = useMemo(() => monthGrid(year, month, weekStart), [year, month, weekStart]);
   const [gridHeight, setGridHeight] = useState(0);
   const [cellWidth, setCellWidth] = useState(0);
@@ -83,8 +83,19 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
               const isToday = day === todayDay;
               const isSelected = day === selected;
               const occurrences = byDay.get(day) ?? [];
-              const shown = occurrences.length > capacity ? Math.max(0, capacity - 1) : occurrences.length;
+              // A day with events always names at least one; the rest are counted.
+              const shown = occurrences.length > capacity ? Math.max(1, capacity - 1) : occurrences.length;
               const hidden = occurrences.length - shown;
+              // With room for a single line, the count moves up beside the dates.
+              const countInHeader = hidden > 0 && capacity < 2;
+              const count = hidden > 0 && (
+                <View style={[styles.count, { backgroundColor: tint(p.primary, isSelected ? 0.28 : 0.16) }]}>
+                  {/* The mark keeps the plus sign in front of the number in right-to-left text. */}
+                  <Txt size={11} weight="bold" color={p.primary} style={styles.countText}>
+                    {`\u200E+${hidden}`}
+                  </Txt>
+                </View>
+              );
               return (
                 <Pressable
                   key={day}
@@ -104,6 +115,7 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
                         {g.d}
                       </Txt>
                     </View>
+                    {countInHeader && count}
                     <Txt size={11} weight="medium" color={inMonth ? p.gold : p.faint} numberOfLines={1} style={styles.hijri}>
                       {h.day === 1 && !compact ? `${h.day} ${hijriMonths[h.month - 1]}` : h.day}
                     </Txt>
@@ -121,12 +133,7 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
                       </View>
                     );
                   })}
-                  {hidden > 0 && (
-                    <Txt size={10} weight="medium" color={p.muted} numberOfLines={1} style={styles.more}>
-                      {/* The mark keeps the plus sign in front of the number in right-to-left text. */}
-                      {compact ? `\u200E+${hidden}` : `\u200E+${hidden} ${t('more')}`}
-                    </Txt>
-                  )}
+                  {!countInHeader && count && <View style={styles.countRow}>{count}</View>}
                 </Pressable>
               );
             })}
@@ -149,5 +156,7 @@ const styles = StyleSheet.create({
   hijri: { flexShrink: 1, paddingEnd: 2 },
   chip: { height: CHIP_H, marginBottom: 2, borderRadius: 4, borderStartWidth: 3, paddingHorizontal: 3, justifyContent: 'center' },
   chipText: { lineHeight: CHIP_H },
-  more: { paddingHorizontal: 3, lineHeight: 14 },
+  count: { height: 16, minWidth: 22, paddingHorizontal: 4, borderRadius: RADIUS.pill, alignItems: 'center', justifyContent: 'center' },
+  countText: { lineHeight: 16 },
+  countRow: { flexDirection: 'row' },
 });

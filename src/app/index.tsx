@@ -128,7 +128,7 @@ export default function CalendarScreen() {
       {!wide && <View style={styles.switcherRow}>{switcher}</View>}
 
       <View style={[styles.body, wide && { flexDirection: 'row' }]}>
-        <View style={[styles.main, { backgroundColor: p.surface, borderColor: p.border }, wide ? { flex: 1 } : { flex: mode === 'month' ? 1.8 : 1 }]}>
+        <View style={[styles.main, { backgroundColor: p.surface, borderColor: p.border }, wide ? { flex: 1 } : mode === 'month' ? { flex: 2.4, minHeight: 420 } : { flex: 1 }]}>
           {mode === 'month' ? (
             <MonthView
               year={focus.y}
