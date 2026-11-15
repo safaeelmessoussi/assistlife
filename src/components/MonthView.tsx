@@ -1,6 +1,6 @@
 /** Month grid: seven columns at every width, both dates in every cell. */
 import { useMemo, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Txt } from '@/components/ui';
 import { useLocale, usePalette } from '@/hooks';
@@ -11,6 +11,9 @@ import { RADIUS, tint } from '@/theme';
 
 const HEADER_H = 26;
 const CHIP_H = 19;
+const COUNT_H = 18;
+/** Room for the dates, one named event and the count of the others. The grid scrolls when the screen is shorter. */
+const MIN_ROW_H = HEADER_H + CHIP_H + 2 + COUNT_H + 4;
 
 type Props = {
   year: number;
@@ -32,8 +35,9 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
   const [gridHeight, setGridHeight] = useState(0);
   const [cellWidth, setCellWidth] = useState(0);
 
-  const rowHeight = gridHeight / weeks.length;
-  const capacity = Math.max(0, Math.floor((rowHeight - HEADER_H - 4) / (CHIP_H + 2)));
+  const rowHeight = Math.max(MIN_ROW_H, gridHeight / weeks.length);
+  // Lines available under the dates; when events overflow, the last line holds the count.
+  const capacity = Math.max(2, Math.floor((rowHeight - HEADER_H - 4) / (CHIP_H + 2)));
   const compact = cellWidth > 0 && cellWidth < 64;
 
   // Swiping follows reading direction: in Arabic the next month lies to the left, so the finger moves right.
@@ -64,8 +68,9 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
         })}
       </View>
 
-      <View
+      <ScrollView
         style={styles.grid}
+        contentContainerStyle={{ minHeight: '100%', height: gridHeight > 0 ? rowHeight * weeks.length : undefined }}
         onLayout={(e) => {
           // A hidden screen reports zero; keep the last real size so chips do not flash away.
           const { width, height } = e.nativeEvent.layout;
@@ -84,18 +89,8 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
               const isSelected = day === selected;
               const occurrences = byDay.get(day) ?? [];
               // A day with events always names at least one; the rest are counted.
-              const shown = occurrences.length > capacity ? Math.max(1, capacity - 1) : occurrences.length;
+              const shown = occurrences.length > capacity ? capacity - 1 : occurrences.length;
               const hidden = occurrences.length - shown;
-              // With room for a single line, the count moves up beside the dates.
-              const countInHeader = hidden > 0 && capacity < 2;
-              const count = hidden > 0 && (
-                <View style={[styles.count, { backgroundColor: tint(p.primary, isSelected ? 0.28 : 0.16) }]}>
-                  {/* The mark keeps the plus sign in front of the number in right-to-left text. */}
-                  <Txt size={11} weight="bold" color={p.primary} style={styles.countText}>
-                    {`\u200E+${hidden}`}
-                  </Txt>
-                </View>
-              );
               return (
                 <Pressable
                   key={day}
@@ -115,7 +110,6 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
                         {g.d}
                       </Txt>
                     </View>
-                    {countInHeader && count}
                     <Txt size={11} weight="medium" color={inMonth ? p.gold : p.faint} numberOfLines={1} style={styles.hijri}>
                       {h.day === 1 && !compact ? `${h.day} ${hijriMonths[h.month - 1]}` : h.day}
                     </Txt>
@@ -133,13 +127,22 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
                       </View>
                     );
                   })}
-                  {!countInHeader && count && <View style={styles.countRow}>{count}</View>}
+                  {hidden > 0 && (
+                    <View style={styles.countRow}>
+                      <View style={[styles.count, { backgroundColor: tint(p.primary, isSelected ? 0.28 : 0.16) }]}>
+                        {/* The mark keeps the plus sign in front of the number in right-to-left text. */}
+                        <Txt size={11} weight="bold" color={p.primary} style={styles.countText}>
+                          {`\u200E+${hidden}`}
+                        </Txt>
+                      </View>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
           </View>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
