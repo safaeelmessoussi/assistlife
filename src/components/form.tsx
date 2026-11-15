@@ -1,7 +1,7 @@
 /** Form rows shared by the event and settings screens. */
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 
 import { IconButton, Txt, type IconName } from '@/components/ui';
