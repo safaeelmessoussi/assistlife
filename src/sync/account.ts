@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 
 import { accountsConfigured } from '@/config';
+import { applyCycleBlock, cycleBlock, useCycle } from '@/cycle/store';
 import { applyGoogleBlock, googleBlock, useGoogle } from '@/google/store';
 import { deriveKeys, normalizeEmail } from '@/lib/sync/crypto';
 import { syncOnce, WrongKeyError } from '@/lib/sync/engine';
@@ -32,7 +33,7 @@ let applying = false;
 
 /** Everything that appears in the calendar: the user's own data plus the copy of their outside calendars. */
 function fullSnapshot(): AppSnapshot {
-  return { ...currentSnapshot(), blocks: { google: googleBlock() } };
+  return { ...currentSnapshot(), blocks: { google: googleBlock(), cycle: cycleBlock() } };
 }
 
 /** Bring this device and the backup into agreement. Calls made while one runs are folded into one follow-up. */
@@ -55,6 +56,8 @@ export function syncNow(): Promise<void> {
           useStore.getState().applySnapshot(outcome.snapshot);
           const google = outcome.snapshot.blocks?.google;
           if (google) applyGoogleBlock(google);
+          const cycle = outcome.snapshot.blocks?.cycle;
+          if (cycle) applyCycleBlock(cycle);
           applying = false;
         }
       } while (again);
@@ -153,11 +156,13 @@ export function startSync(): void {
     clearTimeout(timer);
     timer = setTimeout(() => void syncNow(), 3000);
   });
-  useGoogle.subscribe((state, previous) => {
-    if (applying || !userId || state.updatedAt === previous.updatedAt) return;
-    clearTimeout(timer);
-    timer = setTimeout(() => void syncNow(), 3000);
-  });
+  for (const store of [useGoogle, useCycle]) {
+    store.subscribe((state, previous) => {
+      if (applying || !userId || state.updatedAt === previous.updatedAt) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => void syncNow(), 3000);
+    });
+  }
 
   // Coming back to the app picks up what other devices changed.
   AppState.addEventListener('change', (status) => {

@@ -80,7 +80,8 @@ export default function SettingsScreen() {
             onPress={() => router.push('/account')}
             testID="open-account"
           />
-          <Row icon="logo-google" label={t('googleCalendar')} value="" onPress={() => router.push('/google')} testID="open-google" last />
+          <Row icon="logo-google" label={t('googleCalendar')} value="" onPress={() => router.push('/google')} testID="open-google" />
+          <Row icon="water-outline" label={t('cycle')} value="" onPress={() => router.push('/cycle')} testID="open-cycle" last />
         </Card>
 
         <SectionTitle>{t('layers')}</SectionTitle>

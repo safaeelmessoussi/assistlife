@@ -5,9 +5,10 @@ import { PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-nat
 import { Txt } from '@/components/ui';
 import { useLocale, usePalette } from '@/hooks';
 import { fromDayNum, monthGrid, weekday, type DayNum } from '@/lib/dates';
+import type { CycleDay } from '@/lib/cycle/predict';
 import type { Occurrence } from '@/lib/events';
 import type { Layer } from '@/store';
-import { RADIUS, tint } from '@/theme';
+import { CYCLE_COLORS, RADIUS, tint } from '@/theme';
 
 const HEADER_H = 26;
 const CHIP_H = 19;
@@ -22,13 +23,15 @@ type Props = {
   selected: DayNum;
   todayDay: DayNum;
   byDay: Map<DayNum, Occurrence[]>;
+  /** The cycle layer, when it is on: tints the days it concerns. */
+  cycle?: Map<DayNum, CycleDay>;
   layers: Map<string, Layer>;
   onSelect: (day: DayNum) => void;
   onOpenDay: (day: DayNum) => void;
   onSwipe: (direction: 1 | -1) => void;
 };
 
-export function MonthView({ year, month, weekStart, selected, todayDay, byDay, layers, onSelect, onOpenDay, onSwipe }: Props) {
+export function MonthView({ year, month, weekStart, selected, todayDay, byDay, cycle, layers, onSelect, onOpenDay, onSwipe }: Props) {
   const p = usePalette();
   const { weekdays, hijri, hijriMonths, rtl, formatGregorian, formatHijri } = useLocale();
   const weeks = useMemo(() => monthGrid(year, month, weekStart), [year, month, weekStart]);
@@ -88,6 +91,7 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
               const isToday = day === todayDay;
               const isSelected = day === selected;
               const occurrences = byDay.get(day) ?? [];
+              const cycleKind = cycle?.get(day)?.kind;
               // A day with events always names at least one; the rest are counted.
               const shown = occurrences.length > capacity ? capacity - 1 : occurrences.length;
               const hidden = occurrences.length - shown;
@@ -95,6 +99,8 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
                 <Pressable
                   key={day}
                   testID={`day-${g.y}-${g.m}-${g.d}`}
+                  // Read by tests: which cycle tint the cell carries.
+                  nativeID={cycleKind ? `cycle-${cycleKind}-${day}` : undefined}
                   accessibilityRole="button"
                   accessibilityLabel={`${formatGregorian(day)} — ${formatHijri(day)}`}
                   accessibilityState={{ selected: isSelected }}
@@ -102,6 +108,7 @@ export function MonthView({ year, month, weekStart, selected, todayDay, byDay, l
                   style={[
                     styles.cell,
                     { borderEndColor: p.border, backgroundColor: isSelected ? p.primarySoft : inMonth ? p.surface : p.surfaceAlt },
+                    cycleKind && { backgroundColor: CYCLE_COLORS[cycleKind], opacity: inMonth ? 1 : 0.5 },
                     isSelected && { borderColor: p.primary, borderEndColor: p.primary, borderWidth: 1.5, borderEndWidth: 1.5 },
                   ]}>
                   <View style={styles.cellHeader}>

@@ -16,6 +16,7 @@ One calendar for a Muslim's whole day — worship, health, work and family — w
 - Optional account: end-to-end encrypted backup and sync between devices.
 - Google Calendar inside the calendar: read, create, change and delete (browser only for now).
 - Islamic layer: prayer times, fasting days and occasions with their sources, remembrance times, Friday items, events tied to a prayer, and a warning when an event covers a prayer's whole time.
+- Optional cycle layer: import of a period tracker's backup, period days, expected periods and estimated fertile days.
 - Android test app built automatically and offered for download from the settings.
 
 ## Run it

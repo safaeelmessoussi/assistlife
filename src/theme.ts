@@ -64,6 +64,9 @@ export const LAYER_COLORS = ['#0F8B6F', '#C08A1E', '#C2543C', '#7A5AC2', '#2F7EC
 /** Colours of the computed layers: fasting days, occasions, remembrance. */
 export const SYSTEM_COLORS = { 'sys:fasting': '#B8862B', 'sys:occasions': '#0F8B6F', 'sys:athkar': '#7A5AC2' } as const;
 
+/** Cell backgrounds of the cycle layer. */
+export const CYCLE_COLORS = { period: 'rgba(226, 92, 133, 0.34)', expected: 'rgba(226, 92, 133, 0.14)', fertile: 'rgba(222, 180, 50, 0.18)', ovulation: 'rgba(222, 180, 50, 0.40)' } as const;
+
 /** A translucent tint of a layer colour, for event backgrounds. */
 export function tint(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);

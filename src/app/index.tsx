@@ -10,9 +10,11 @@ import { MonthView } from '@/components/MonthView';
 import { TimeGrid } from '@/components/TimeGrid';
 import { IconButton, Segmented, Txt } from '@/components/ui';
 import { ISLAMIC_CONTENT } from '@/content/islamic';
+import { useCycle } from '@/cycle/store';
 import { googleLayers, useGoogle } from '@/google/store';
 import { useLocale, useNow, usePalette, usePrayerTimes } from '@/hooks';
-import { addMonths, daysInMonth, fromDayNum, monthGrid, startOfWeek, toDayNum, toIso, type DayNum } from '@/lib/dates';
+import { addMonths, daysInMonth, fromDayNum, monthGrid, parseIso, startOfWeek, toDayNum, toIso, type DayNum } from '@/lib/dates';
+import { cycleDays } from '@/lib/cycle/predict';
 import { expandEvents, groupByDay } from '@/lib/events';
 import { islamicEvents } from '@/lib/islamic';
 import { resolveAnchor } from '@/lib/prayer';
@@ -38,6 +40,9 @@ export default function CalendarScreen() {
   const googleEvents = useGoogle((g) => g.events);
   const googleCalendars = useGoogle((g) => g.calendars);
 
+  const cycleOn = useCycle((c) => c.enabled);
+  const periods = useCycle((c) => c.periods);
+
   const [mode, setMode] = useState<ViewMode>('month');
   const [selected, setSelected] = useState<DayNum>(now.day);
   const focus = fromDayNum(selected);
@@ -61,6 +66,11 @@ export default function CalendarScreen() {
     return new Map([...ownLayers, ...googleLayers(googleCalendars), ...system].map((l) => [l.id, l]));
   }, [ownLayers, googleCalendars, t]);
 
+  const cycle = useMemo(
+    () => (cycleOn ? cycleDays(periods, days[0], days[days.length - 1]) : undefined),
+    [cycleOn, periods, days],
+  );
+
   const byDay = useMemo(() => {
     const from = days[0];
     const to = days[days.length - 1];
@@ -77,11 +87,13 @@ export default function CalendarScreen() {
       },
       (key) => ISLAMIC_CONTENT[key].title[lang],
     );
-    const visible = [...ownEvents, ...googleEvents, ...islamic].filter((e) => layers.get(e.layerId)?.visible === true);
+    // No fast is suggested on a recorded period day.
+    const suggested = islamic.filter((e) => !(e.layerId === 'sys:fasting' && cycle?.get(parseIso(e.date) ?? -1)?.kind === 'period'));
+    const visible = [...ownEvents, ...googleEvents, ...suggested].filter((e) => layers.get(e.layerId)?.visible === true);
     // An event tied to a prayer starts when that prayer falls on its own day.
     const occurrences = expandEvents(visible, from, to, hijriCfg, (event, day) => resolveAnchor(event.anchor!, prayers(day)));
     return groupByDay(occurrences, from, to);
-  }, [ownEvents, googleEvents, layers, days, hijri, hijriCfg, prayers, settings, lang]);
+  }, [ownEvents, googleEvents, layers, days, hijri, hijriCfg, prayers, settings, lang, cycle]);
 
   // The month grid leaves out the daily remembrance times: they would fill every cell.
   const monthByDay = useMemo(
@@ -167,6 +179,7 @@ export default function CalendarScreen() {
               selected={selected}
               todayDay={now.day}
               byDay={monthByDay}
+              cycle={cycle}
               layers={layers}
               onSelect={setSelected}
               onOpenDay={(day) => {
@@ -202,6 +215,7 @@ export default function CalendarScreen() {
               prayers={prayers(selected)}
               showPrayers={settings.showPrayers}
               nowMinutes={selected === now.day ? now.minutes : undefined}
+              cycle={cycle?.get(selected)}
               onAdd={() => createEvent(selected)}
               onOpenEvent={openEvent}
             />

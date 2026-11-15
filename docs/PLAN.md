@@ -248,6 +248,10 @@ Delivered in testable steps:
 
 ### Phase 2 — cycle and make-up
 
+**Brought forward (built):** the optional cycle layer — import of a "My Calendar" backup (read on the device, never uploaded), recording and deleting periods by hand, period days, the expected next periods and the estimated fertile days tinted on the month grid, the day of the cycle in the day list, sync in the encrypted backup, and no fasting suggestion on a recorded period day. Period length is read as the tracker's stored value plus one day, which reproduces the tracker's own display for the checked months.
+
+**Still to build in this phase:** the make-up tracker (missed Ramadan days counted and planned), pausing prayer reminders with alternative worship suggestions, postpartum mode, discreet mode for shared screens and prints, import in the phone app, importers for other trackers.
+
 Cycle layer, backup import, cycle-aware worship, make-up tracker.
 
 ### Phase 3 — sources and coach
