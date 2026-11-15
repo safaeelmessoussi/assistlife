@@ -10,7 +10,8 @@ on:
 
 concurrency:
   group: android-build
-  cancel-in-progress: true
+  # A running build finishes; newer pushes wait their turn.
+  cancel-in-progress: false
 
 permissions:
   contents: write

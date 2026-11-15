@@ -8,7 +8,8 @@ import { Platform } from 'react-native';
 
 import { GOOGLE_WEB_CLIENT_ID } from '@/config';
 
-const SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+// Read the list of calendars; read and write their events. Nothing else.
+const SCOPE = 'https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events';
 const SCRIPT = 'https://accounts.google.com/gsi/client';
 
 type TokenResponse = { access_token?: string; expires_in?: number | string; error?: string };
@@ -92,3 +93,6 @@ export async function revokeToken(): Promise<void> {
     // Offline: the token expires on its own within the hour.
   }
 }
+
+/** A valid token, asking Google again when the last one has run out. Call from a tap. */
+export const ensureToken = async (): Promise<string> => currentToken() ?? requestToken();

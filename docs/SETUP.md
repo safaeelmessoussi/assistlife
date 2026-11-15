@@ -22,7 +22,7 @@ E-mail confirmation can stay on (new users confirm by a link, then sign in) or b
 1. In [Google Cloud Console](https://console.cloud.google.com), create a project.
 2. **APIs & Services → Library**: enable **Google Calendar API**.
 3. **APIs & Services → OAuth consent screen** (or **Google Auth Platform**): user type **External**, keep it in **Testing**, and add as **test users** the Google addresses that will try the app.
-4. Add the scope `https://www.googleapis.com/auth/calendar.readonly`.
+4. Add the scopes `https://www.googleapis.com/auth/calendar.calendarlist.readonly` and `https://www.googleapis.com/auth/calendar.events` (list the calendars; read and write their events).
 5. **Credentials → Create credentials → OAuth client ID**, type **Web application**. Under **Authorized JavaScript origins** add `https://assistlife.pages.dev` (and `http://localhost:8081` for local runs).
 6. Copy the **Client ID** → `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`. The client secret is not used.
 

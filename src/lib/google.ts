@@ -1,6 +1,6 @@
 /** Turning Google Calendar's event format into the app's own. Pure functions, no network. */
-import { parseIso, toDayNum, toIso, type DayNum } from './dates';
-import type { CalEvent } from './events';
+import { MIN_PER_DAY, formatTime, parseIso, toDayNum, toIso, weekday, type DayNum } from './dates';
+import type { CalEvent, Repeat } from './events';
 
 export type GoogleEventTime = { date?: string; dateTime?: string; timeZone?: string };
 
@@ -14,6 +14,8 @@ export type GoogleEvent = {
   start?: GoogleEventTime;
   end?: GoogleEventTime;
   updated?: string;
+  /** Present on one occurrence of a repeating event. */
+  recurringEventId?: string;
 };
 
 export type GoogleCalendar = {
@@ -23,6 +25,8 @@ export type GoogleCalendar = {
   backgroundColor?: string;
   primary?: boolean;
   selected?: boolean;
+  /** 'owner' and 'writer' may change events; 'reader' and 'freeBusyReader' may not. */
+  accessRole?: string;
 };
 
 export type LocalMoment = { day: DayNum; minutes: number };
@@ -72,6 +76,7 @@ export function mapGoogleEvent(
     location: item.location?.trim() || undefined,
     notes: item.description ? plainText(item.description) || undefined : undefined,
     link: item.htmlLink,
+    ...(item.recurringEventId ? { series: true } : {}),
     createdAt: stamp,
     updatedAt: stamp,
   };
@@ -104,3 +109,75 @@ export function syncWindow(today: DayNum): { timeMin: string; timeMax: string } 
   return { timeMin: iso(today - 62), timeMax: iso(today + 366) };
 }
 
+
+/** The Google calendar and event behind one of the app's Google event ids. */
+export function splitGoogleId(id: string): { calendarId: string; eventId: string } {
+  const body = id.slice(2);
+  const cut = body.lastIndexOf(':');
+  return { calendarId: body.slice(0, cut), eventId: body.slice(cut + 1) };
+}
+
+const RRULE_DAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const RRULE_FREQ: Partial<Record<Repeat['freq'], string>> = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY', yearly: 'YEARLY' };
+
+/** Whether Google Calendar can express a repeat. It has no Hijri calendar. */
+export const googleCanRepeat = (freq: Repeat['freq']) => freq in RRULE_FREQ;
+
+function recurrenceRule(repeat: Repeat, first: DayNum, allDay: boolean): string | null {
+  const freq = RRULE_FREQ[repeat.freq];
+  if (!freq) return null;
+  const parts = [`FREQ=${freq}`];
+  if (repeat.interval > 1) parts.push(`INTERVAL=${Math.floor(repeat.interval)}`);
+  if (repeat.freq === 'weekly') {
+    const days = repeat.weekdays?.length ? repeat.weekdays : [weekday(first)];
+    parts.push(`BYDAY=${[...days].sort().map((d) => RRULE_DAYS[d]).join(',')}`);
+  }
+  const until = parseIso(repeat.until);
+  if (until !== null) {
+    const compact = toIso(until).replace(/-/g, '');
+    // For timed events Google wants an instant; the end of that day in UTC is close enough for a last day.
+    parts.push(`UNTIL=${allDay ? compact : `${compact}T235959Z`}`);
+  }
+  return `RRULE:${parts.join(';')}`;
+}
+
+export type GoogleEventBody = {
+  summary: string;
+  location: string;
+  description: string;
+  start: GoogleEventTime;
+  end: GoogleEventTime;
+  recurrence?: string[];
+};
+
+type Writable = Pick<CalEvent, 'title' | 'date' | 'allDay' | 'spanDays' | 'startMin' | 'durationMin' | 'repeat' | 'location' | 'notes'>;
+
+/**
+ * An app event in Google Calendar's format. Times are written as wall-clock
+ * values with the device's time zone name, so Google handles clock changes.
+ * `withRepeat` is false when changing one existing occurrence.
+ */
+export function toGoogleBody(event: Writable, timeZone: string, withRepeat: boolean): GoogleEventBody {
+  const first = parseIso(event.date) ?? 0;
+  const body: GoogleEventBody = {
+    summary: event.title,
+    location: event.location ?? '',
+    description: event.notes ?? '',
+    start: {},
+    end: {},
+  };
+  if (event.allDay) {
+    body.start = { date: toIso(first) };
+    body.end = { date: toIso(first + Math.max(1, event.spanDays)) };
+  } else {
+    const endMin = event.startMin + Math.max(0, event.durationMin);
+    const stamp = (day: DayNum, minutes: number) => `${toIso(day)}T${formatTime(minutes)}:00`;
+    body.start = { dateTime: stamp(first, event.startMin), timeZone };
+    body.end = { dateTime: stamp(first + Math.floor(endMin / MIN_PER_DAY), endMin % MIN_PER_DAY), timeZone };
+  }
+  if (withRepeat && event.repeat) {
+    const rule = recurrenceRule(event.repeat, first, event.allDay);
+    if (rule) body.recurrence = [rule];
+  }
+  return body;
+}

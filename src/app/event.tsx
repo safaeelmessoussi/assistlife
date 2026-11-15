@@ -7,12 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, Chip, Row, ScreenHeader, Toggle } from '@/components/form';
 import { DatePickerSheet, TimePickerSheet } from '@/components/pickers';
 import { Button, Confirm, IconButton, Sheet, Txt } from '@/components/ui';
-import { useGoogle } from '@/google/store';
+import { deleteGoogleEvent, googleLayers, saveGoogleEvent, useGoogle } from '@/google/store';
 import { useLocale, usePalette } from '@/hooks';
 import type { StringKey } from '@/i18n/strings';
 import { MIN_PER_DAY, formatTime, parseIso, today, toIso, weekday, type DayNum } from '@/lib/dates';
 import type { RepeatFreq } from '@/lib/events';
-import { googleLayerId, isGoogleId } from '@/lib/google';
+import { googleCanRepeat, googleLayerId, isGoogleId } from '@/lib/google';
 import { layerName, useStore, type EventDraft } from '@/store';
 import { FONT, RADIUS, SPACE } from '@/theme';
 
@@ -31,10 +31,13 @@ type Picker = 'date' | 'endDate' | 'start' | 'end' | 'repeat' | 'until' | 'delet
 
 export default function EventScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  return isGoogleId(id) ? <GoogleEventView id={id!} /> : <EventForm />;
+  const googleEvent = useGoogle((g) => (isGoogleId(id) ? g.events.find((e) => e.id === id) : undefined));
+  const writable = useGoogle((g) => g.calendars.find((c) => googleLayerId(c.id) === googleEvent?.layerId)?.writable === true);
+  // Events of a calendar the user may not change (holidays, shared read-only ones) are shown, not edited.
+  return isGoogleId(id) && !writable ? <GoogleEventView id={id!} /> : <EventForm />;
 }
 
-/** An event that lives in Google Calendar: shown, not edited here. */
+/** An event from a read-only Google calendar: shown, not edited here. */
 function GoogleEventView({ id }: { id: string }) {
   const p = usePalette();
   const { t, weekdayName, formatGregorian, formatHijri } = useLocale();
@@ -90,10 +93,18 @@ function EventForm() {
   const { t, lang, weekdays, weekdayName, formatGregorian, formatHijri } = useLocale();
   const params = useLocalSearchParams<{ id?: string; date?: string; start?: string }>();
 
-  const layers = useStore((s) => s.layers);
+  const ownLayers = useStore((s) => s.layers);
+  const googleCalendars = useGoogle((g) => g.calendars);
   const weekStart = useStore((s) => s.settings.weekStart);
-  const existing = useStore((s) => s.events.find((e) => e.id === params.id));
+  const ownEvent = useStore((s) => s.events.find((e) => e.id === params.id));
+  const googleEvent = useGoogle((g) => g.events.find((e) => e.id === params.id));
+  const existing = ownEvent ?? googleEvent;
   const { addEvent, updateEvent, removeEvent } = useStore.getState();
+
+  // A new event may go to one of the user's own calendars or to a Google calendar they may write to.
+  // An existing event stays in the kind of calendar it lives in.
+  const googleChoices = googleLayers(googleCalendars.filter((c) => c.writable));
+  const layers = googleEvent ? googleChoices.filter((l) => l.id === googleEvent.layerId) : ownEvent ? ownLayers : [...ownLayers, ...googleChoices];
 
   const initialStart = existing?.startMin ?? (params.start ? Number(params.start) || 0 : 9 * 60);
   const [title, setTitle] = useState(existing?.title ?? '');
@@ -110,10 +121,22 @@ function EventForm() {
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [picker, setPicker] = useState<Picker>(null);
   const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [googleError, setGoogleError] = useState(false);
+
+  const inGoogle = isGoogleId(layerId);
+  // Google has no Hijri calendar, and one occurrence of a Google series cannot carry its own repeat.
+  const repeatOptions = REPEAT_OPTIONS.filter((option) => !inGoogle || option === 'none' || googleCanRepeat(option));
+  const canRepeat = !googleEvent;
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
-  const save = () => {
+  const chooseLayer = (id: string) => {
+    setLayerId(id);
+    if (isGoogleId(id) && freq !== 'none' && !googleCanRepeat(freq)) setFreq('none');
+  };
+
+  const save = async () => {
     if (!title.trim()) {
       setError(true);
       return;
@@ -138,8 +161,27 @@ function EventForm() {
       location: location.trim() || undefined,
       notes: notes.trim() || undefined,
     };
-    if (existing) updateEvent(existing.id, draft);
+    if (inGoogle) {
+      setBusy(true);
+      setGoogleError(false);
+      const ok = await saveGoogleEvent(draft, googleEvent?.id);
+      setBusy(false);
+      if (!ok) return setGoogleError(true);
+    } else if (existing) updateEvent(existing.id, draft);
     else addEvent(draft);
+    close();
+  };
+
+  const remove = async () => {
+    if (!existing) return;
+    setPicker(null);
+    if (googleEvent) {
+      setBusy(true);
+      setGoogleError(false);
+      const ok = await deleteGoogleEvent(googleEvent.id);
+      setBusy(false);
+      if (!ok) return setGoogleError(true);
+    } else removeEvent(existing.id);
     close();
   };
 
@@ -178,6 +220,12 @@ function EventForm() {
           </Txt>
         )}
 
+        {googleEvent?.series && (
+          <Txt size={13} color={p.gold} style={styles.error} testID="occurrence-note">
+            {t('googleOccurrence')}
+          </Txt>
+        )}
+
         <View style={styles.layers}>
           {layers.map((layer) => (
             <Chip
@@ -185,7 +233,7 @@ function EventForm() {
               label={layerName(layer, lang)}
               color={layer.color}
               active={layer.id === layerId}
-              onPress={() => setLayerId(layer.id)}
+              onPress={() => chooseLayer(layer.id)}
               testID={`layer-${layer.id}`}
             />
           ))}
@@ -216,6 +264,7 @@ function EventForm() {
         </Card>
 
         <View style={{ height: SPACE.lg }} />
+        {canRepeat && (
         <Card>
           <Row icon="repeat-outline" label={t('repeat')} value={t(REPEAT_LABEL[freq])} onPress={() => setPicker('repeat')} testID="repeat-row" last={freq === 'none'} />
           {freq === 'weekly' && (
@@ -240,8 +289,9 @@ function EventForm() {
             </Row>
           )}
         </Card>
+        )}
 
-        <View style={{ height: SPACE.lg }} />
+        {canRepeat && <View style={{ height: SPACE.lg }} />}
         <Card>
           <TextInput
             value={location}
@@ -265,8 +315,21 @@ function EventForm() {
         </Card>
       </ScrollView>
 
+      {googleError && (
+        <Txt size={13} color={p.danger} style={styles.footerError} testID="google-save-error">
+          {t('googleSaveError')}
+        </Txt>
+      )}
       <View style={[styles.footer, { borderTopColor: p.border, backgroundColor: p.surface }]}>
-        <Button label={t('save')} onPress={save} icon="checkmark" style={{ flex: 1 }} testID="save" />
+        <Button
+          label={busy ? t('working') : t('save')}
+          onPress={() => {
+            if (!busy) void save();
+          }}
+          icon="checkmark"
+          style={{ flex: 1 }}
+          testID="save"
+        />
       </View>
 
       {picker === 'date' && (
@@ -330,7 +393,7 @@ function EventForm() {
       {picker === 'repeat' && (
         <Sheet title={t('repeat')} onClose={() => setPicker(null)} testID="repeat-sheet">
           <View style={{ gap: SPACE.sm }}>
-            {REPEAT_OPTIONS.map((option) => (
+            {repeatOptions.map((option) => (
               <Chip
                 key={option}
                 label={t(REPEAT_LABEL[option])}
@@ -347,13 +410,10 @@ function EventForm() {
       )}
       {picker === 'delete' && existing && (
         <Confirm
-          message={existing.repeat ? t('deleteSeriesConfirm') : t('deleteEventConfirm')}
+          message={t(existing.series ? 'deleteOccurrenceConfirm' : existing.repeat ? 'deleteSeriesConfirm' : 'deleteEventConfirm')}
           confirmLabel={t('delete')}
           onCancel={() => setPicker(null)}
-          onConfirm={() => {
-            removeEvent(existing.id);
-            close();
-          }}
+          onConfirm={() => void remove()}
         />
       )}
     </SafeAreaView>
@@ -370,5 +430,6 @@ const styles = StyleSheet.create({
   dual: { alignItems: 'flex-end', flexShrink: 1 },
   weekdays: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderBottomWidth: StyleSheet.hairlineWidth },
   notes: { minHeight: 96, textAlignVertical: 'top' },
+  footerError: { paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, textAlign: 'center' },
   footer: { flexDirection: 'row', padding: SPACE.md, borderTopWidth: StyleSheet.hairlineWidth },
 });

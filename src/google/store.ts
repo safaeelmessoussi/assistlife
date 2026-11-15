@@ -6,14 +6,14 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { STRINGS } from '@/i18n/strings';
 import { today } from '@/lib/dates';
 import type { CalEvent } from '@/lib/events';
-import { googleLayerId, mapGoogleEvent, syncWindow, type GoogleCalendar, type GoogleEvent } from '@/lib/google';
-import { useStore, type Layer } from '@/store';
+import { googleLayerId, mapGoogleEvent, splitGoogleId, syncWindow, toGoogleBody, type GoogleCalendar, type GoogleEvent } from '@/lib/google';
+import { useStore, type EventDraft, type Layer } from '@/store';
 
-import { currentToken, requestToken, revokeToken } from './auth';
+import { currentToken, ensureToken, requestToken, revokeToken } from './auth';
 
 const API = 'https://www.googleapis.com/calendar/v3';
 
-export type ConnectedCalendar = { id: string; name: string; color: string; shown: boolean };
+export type ConnectedCalendar = { id: string; name: string; color: string; shown: boolean; writable?: boolean };
 
 type GoogleState = {
   /** The Google account's address, or null when not connected. */
@@ -108,6 +108,7 @@ async function refreshWith(token: string): Promise<void> {
       id: c.id,
       name: c.summaryOverride ?? c.summary ?? c.id,
       color: c.backgroundColor ?? '#6E7A86',
+      writable: c.accessRole === 'owner' || c.accessRole === 'writer',
       // A calendar keeps the user's choice; a new one follows what Google itself shows.
       shown: known.get(c.id)?.shown ?? (c.selected === true || c.primary === true),
     }));
@@ -167,4 +168,61 @@ export async function disconnectGoogle(): Promise<void> {
 /** The shown Google calendars, in the shape the calendar screen uses for its own layers. */
 export function googleLayers(calendars: ConnectedCalendar[]): Layer[] {
   return calendars.filter((c) => c.shown).map((c) => ({ id: googleLayerId(c.id), name: c.name, color: c.color, visible: true, updatedAt: 0 }));
+}
+
+async function send<T>(token: string, method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T | null> {
+  const response = await fetch(`${API}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  // Deleting something already gone counts as done.
+  if (!response.ok && !(method === 'DELETE' && (response.status === 404 || response.status === 410))) {
+    throw new Error(`Google Calendar answered ${response.status}`);
+  }
+  return response.status === 204 || method === 'DELETE' ? null : ((await response.json()) as T);
+}
+
+const untitledText = () => STRINGS[useStore.getState().settings.language].untitled;
+
+/**
+ * Create an event in a Google calendar, or change an existing one (`existingId`).
+ * Changing one occurrence of a repeating event changes that day only.
+ * Resolves false when Google could not be reached or refused. Call from a tap.
+ */
+export async function saveGoogleEvent(draft: EventDraft, existingId?: string): Promise<boolean> {
+  try {
+    const token = await ensureToken();
+    const calendarId = existingId ? splitGoogleId(existingId).calendarId : draft.layerId.slice(2);
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const base = `/calendars/${encodeURIComponent(calendarId)}/events`;
+    const saved = existingId
+      ? await send<GoogleEvent>(token, 'PATCH', `${base}/${encodeURIComponent(splitGoogleId(existingId).eventId)}`, toGoogleBody(draft, zone, false))
+      : await send<GoogleEvent>(token, 'POST', base, toGoogleBody(draft, zone, true));
+    if (!existingId && draft.repeat) {
+      // Google expands the new repeating event into its occurrences.
+      await refreshWith(token);
+      return true;
+    }
+    const event = saved ? mapGoogleEvent(saved, calendarId, untitledText()) : null;
+    useGoogle.setState((s) => ({
+      events: [...s.events.filter((e) => e.id !== (existingId ?? event?.id)), ...(event ? [event] : [])],
+      updatedAt: Date.now(),
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Delete a Google event, or one occurrence of a repeating one. Call from a tap. */
+export async function deleteGoogleEvent(id: string): Promise<boolean> {
+  try {
+    const { calendarId, eventId } = splitGoogleId(id);
+    await send(await ensureToken(), 'DELETE', `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
+    useGoogle.setState((s) => ({ events: s.events.filter((e) => e.id !== id), updatedAt: Date.now() }));
+    return true;
+  } catch {
+    return false;
+  }
 }
