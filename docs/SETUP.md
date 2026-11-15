@@ -6,7 +6,7 @@ Dashboards change their labels from time to time, so a button may be named sligh
 
 ## 1. Accounts and encrypted backup (Supabase)
 
-1. Create a free project at [supabase.com](https://supabase.com). Choose a region in Europe.
+1. Create a free project at [supabase.com](https://supabase.com). Choose a region in Europe. On the creation form: generate a database password and keep it somewhere safe (the app never uses it), keep **Enable Data API** ticked, untick **Automatically expose new tables**, tick **Enable automatic RLS**, and skip the GitHub connection.
 2. Open **SQL Editor**, paste the contents of [`supabase/migrations/0001_vaults.sql`](../supabase/migrations/0001_vaults.sql) and run it.
 3. Open **Authentication → URL Configuration** and set **Site URL** to `https://assistlife.pages.dev`.
 4. Open **Project Settings → API** (or **API Keys**) and copy:

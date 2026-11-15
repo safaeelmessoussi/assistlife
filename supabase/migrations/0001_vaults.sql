@@ -21,3 +21,7 @@ create policy "update own vault" on public.vaults
   for update to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+
+-- Signed-in users may use the table (within the rules above); visitors may not.
+revoke all on public.vaults from anon;
+grant select, insert, update on public.vaults to authenticated;
