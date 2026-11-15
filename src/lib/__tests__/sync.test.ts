@@ -59,7 +59,7 @@ describe('crypto', () => {
   it('encrypts so that only the right key opens it', async () => {
     const { encKey } = await deriveKeys('a@b.c', 'pw');
     const other = (await deriveKeys('a@b.c', 'pw2')).encKey;
-    const value = { title: 'موعد الطبيب', n: 3 };
+    const value = { title: 'موعد الطبيب — café 🌙 ✓', n: 3 };
     const sealed = encryptJson(encKey, value);
     expect(sealed).not.toContain('موعد');
     expect(encryptJson(encKey, value)).not.toBe(sealed); // fresh nonce every time

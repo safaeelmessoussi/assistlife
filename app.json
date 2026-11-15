@@ -8,9 +8,11 @@
     "scheme": "assistlife",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.assistlife.app"
     },
     "android": {
+      "package": "com.assistlife.app",
       "adaptiveIcon": {
         "backgroundColor": "#0F5C4D",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

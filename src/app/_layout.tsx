@@ -1,3 +1,5 @@
+import '@/polyfills';
+
 // Each weight comes from its own entry so only the four used are bundled.
 import { IBMPlexSansArabic_400Regular } from '@expo-google-fonts/ibm-plex-sans-arabic/400Regular';
 import { IBMPlexSansArabic_500Medium } from '@expo-google-fonts/ibm-plex-sans-arabic/500Medium';

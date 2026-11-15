@@ -68,6 +68,21 @@ export function fromBase64(text: string): Uint8Array {
   return out;
 }
 
+/** UTF-8 bytes → text, written out because not every phone runtime has a built-in decoder. */
+function utf8Decode(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; ) {
+    const b = bytes[i++];
+    let code: number;
+    if (b < 0x80) code = b;
+    else if (b < 0xe0) code = ((b & 0x1f) << 6) | (bytes[i++] & 0x3f);
+    else if (b < 0xf0) code = ((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f);
+    else code = ((b & 0x07) << 18) | ((bytes[i++] & 0x3f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f);
+    out += String.fromCodePoint(code);
+  }
+  return out;
+}
+
 /** Encrypt a JSON-serialisable value. Output: base64 of version | nonce | ciphertext. */
 export function encryptJson(encKey: string, value: unknown): string {
   const nonce = randomBytes(NONCE_BYTES);
@@ -85,5 +100,5 @@ export function decryptJson<T>(encKey: string, payload: string): T {
   if (bytes[0] !== FORMAT_VERSION) throw new Error('Unsupported backup format');
   const nonce = bytes.slice(1, 1 + NONCE_BYTES);
   const opened = xchacha20poly1305(hexToBytes(encKey), nonce).decrypt(bytes.slice(1 + NONCE_BYTES));
-  return JSON.parse(new TextDecoder().decode(opened)) as T;
+  return JSON.parse(utf8Decode(opened)) as T;
 }

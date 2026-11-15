@@ -119,6 +119,9 @@ const ar = {
   openInGoogle: 'فتح في تقويم Google',
   untitled: '(بدون عنوان)',
   connected: 'متصل',
+  androidApp: 'تطبيق أندرويد',
+  androidDownload: 'تنزيل',
+  androidHint: 'نسخة تجريبية. عند التثبيت يطلب الهاتف الإذن بتثبيت تطبيق من خارج المتجر.',
 };
 
 type Strings = typeof ar;
@@ -235,6 +238,9 @@ const fr: Strings = {
   openInGoogle: 'Ouvrir dans Google Agenda',
   untitled: '(sans titre)',
   connected: 'Connecté',
+  androidApp: 'Application Android',
+  androidDownload: 'Télécharger',
+  androidHint: 'Version de test. À l’installation, le téléphone demande d’autoriser une application hors boutique.',
 };
 
 const en: Strings = {
@@ -349,6 +355,9 @@ const en: Strings = {
   openInGoogle: 'Open in Google Calendar',
   untitled: '(no title)',
   connected: 'Connected',
+  androidApp: 'Android app',
+  androidDownload: 'Download',
+  androidHint: 'Test version. When installing, the phone asks you to allow an app from outside the store.',
 };
 
 export type StringKey = keyof Strings;

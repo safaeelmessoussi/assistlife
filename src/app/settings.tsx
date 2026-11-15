@@ -1,11 +1,12 @@
 /** Layers (which calendars show, their names and colours) and app settings. */
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, Row, ScreenHeader, SectionTitle, Toggle } from '@/components/form';
 import { Button, Confirm, IconButton, Segmented, Sheet, Txt } from '@/components/ui';
+import { ANDROID_APP_URL } from '@/config';
 import { useLocale, usePalette } from '@/hooks';
 import { LANGS } from '@/i18n/strings';
 import { today } from '@/lib/dates';
@@ -134,6 +135,25 @@ export default function SettingsScreen() {
             { value: 'dark', label: t('themeDark') },
           ]}
         />
+
+        {Platform.OS === 'web' && (
+          <>
+            <SectionTitle>{t('androidApp')}</SectionTitle>
+            <Card>
+              <Row
+                icon="logo-android"
+                label={t('androidApp')}
+                value={t('androidDownload')}
+                onPress={() => void Linking.openURL(ANDROID_APP_URL)}
+                testID="android-download"
+                last
+              />
+            </Card>
+            <Txt size={12} color={p.muted} style={styles.hint}>
+              {t('androidHint')}
+            </Txt>
+          </>
+        )}
       </ScrollView>
 
       {editing && (
